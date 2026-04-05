@@ -806,7 +806,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      user_can_approve: { Args: { _user_id: string }; Returns: boolean }
+      user_can_write: { Args: { _user_id: string }; Returns: boolean }
+      user_has_empresa_access: {
+        Args: { _empresa_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role:
