@@ -19,7 +19,7 @@ export function useEmpresaData<T extends Record<string, unknown>>(
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetch = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!empresaAtual?.id || options?.enabled === false) {
       setData([]);
       setLoading(false);
@@ -27,8 +27,7 @@ export function useEmpresaData<T extends Record<string, unknown>>(
     }
 
     setLoading(true);
-    let query = supabase
-      .from(table)
+    let query = (supabase.from(table) as any)
       .select(options?.select || "*")
       .eq("empresa_id", empresaAtual.id);
 
@@ -49,20 +48,19 @@ export function useEmpresaData<T extends Record<string, unknown>>(
     const { data: result, error } = await query;
 
     if (error) {
-      toast({ title: "Erro", description: `Falha ao carregar ${table}`, variant: "destructive" });
+      toast({ title: "Erro", description: `Falha ao carregar dados`, variant: "destructive" });
     } else {
       setData((result as T[]) || []);
     }
     setLoading(false);
   }, [empresaAtual?.id, table, options?.select, options?.orderBy, JSON.stringify(options?.filters), options?.enabled]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const insert = async (record: Partial<T>) => {
     if (!empresaAtual?.id) return null;
-    const { data: result, error } = await supabase
-      .from(table)
-      .insert({ ...record, empresa_id: empresaAtual.id } as never)
+    const { data: result, error } = await (supabase.from(table) as any)
+      .insert({ ...record, empresa_id: empresaAtual.id })
       .select()
       .single();
     if (error) {
@@ -70,23 +68,22 @@ export function useEmpresaData<T extends Record<string, unknown>>(
       return null;
     }
     toast({ title: "Salvo com sucesso" });
-    fetch();
-    return result;
+    fetchData();
+    return result as T;
   };
 
   const update = async (id: string, record: Partial<T>) => {
-    const { error } = await supabase
-      .from(table)
-      .update(record as never)
+    const { error } = await (supabase.from(table) as any)
+      .update(record)
       .eq("id", id);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
       return false;
     }
     toast({ title: "Atualizado com sucesso" });
-    fetch();
+    fetchData();
     return true;
   };
 
-  return { data, loading, refetch: fetch, insert, update };
+  return { data, loading, refetch: fetchData, insert, update };
 }

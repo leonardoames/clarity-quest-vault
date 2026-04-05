@@ -1,4 +1,5 @@
 import CadastroGenerico from "./CadastroGenerico";
+import React from "react";
 
 export default function CadastroCategorias() {
   return (
@@ -16,9 +17,9 @@ export default function CadastroCategorias() {
       ]}
       columns={[
         { key: "nome", label: "Nome" },
-        { key: "tipo", label: "Tipo", render: (v) => {
+        { key: "tipo", label: "Tipo", render: (v: unknown): React.ReactNode => {
           const labels: Record<string, string> = { receita: "Receita", despesa: "Despesa", ambos: "Ambos" };
-          return labels[v as string] || v;
+          return labels[v as string] || String(v);
         }},
       ]}
     />
