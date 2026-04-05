@@ -15,8 +15,14 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Verify caller is socio_admin
-    const authHeader = req.headers.get("Authorization")!;
+    // Verify caller is authenticated
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const token = authHeader.replace("Bearer ", "");
     const { data: { user: caller } } = await supabaseAdmin.auth.getUser(token);
     if (!caller) {
@@ -40,10 +46,30 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, ...payload } = await req.json();
+    const body = await req.json();
+    const action = typeof body?.action === "string" ? body.action : "";
+    const payload = body || {};
 
     if (action === "create_user") {
       const { email, password, role, empresa_ids } = payload;
+
+      // Validate inputs
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        return new Response(JSON.stringify({ error: "Email inválido" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!password || typeof password !== "string" || password.length < 6) {
+        return new Response(JSON.stringify({ error: "Senha deve ter pelo menos 6 caracteres" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const validRoles = ["socio_admin", "financeiro_aprovador", "financeiro_operador", "visualizador"];
+      if (!role || !validRoles.includes(role)) {
+        return new Response(JSON.stringify({ error: "Perfil inválido" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       // Create user
       const { data: newUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
@@ -128,7 +154,12 @@ Deno.serve(async (req) => {
 
     if (action === "update_role") {
       const { user_id, role } = payload;
-      // Delete existing roles and insert new one
+      const validRoles = ["socio_admin", "financeiro_aprovador", "financeiro_operador", "visualizador"];
+      if (!user_id || !role || !validRoles.includes(role)) {
+        return new Response(JSON.stringify({ error: "Parâmetros inválidos" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       await supabaseAdmin.from("user_roles").delete().eq("user_id", user_id);
       await supabaseAdmin.from("user_roles").insert({ user_id, role });
 
@@ -165,7 +196,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: "Erro interno do servidor" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
