@@ -1,0 +1,1 @@
+ALTER TABLE public.empresa_users ADD CONSTRAINT empresa_users_user_empresa_unique UNIQUE (user_id, empresa_id);
