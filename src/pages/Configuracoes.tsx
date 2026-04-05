@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon, Users, Building2, UserCheck, Wallet, Tags, Target, CreditCard } from "lucide-react";
+import { Settings as SettingsIcon, Users, Building2, UserCheck, Wallet, Tags, Target, CreditCard, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function Configuracoes() {
@@ -13,6 +13,7 @@ export default function Configuracoes() {
     { title: "Categorias Financeiras", desc: "Classificação de receitas e despesas", icon: Tags, route: "/configuracoes/categorias" },
     { title: "Centros de Custo", desc: "Centros de custo para rateio", icon: Target, route: "/configuracoes/centros-custo" },
     { title: "Contas de Caixa", desc: "Contas internas de caixa", icon: CreditCard, route: "/configuracoes/contas-caixa" },
+    { title: "Meu Perfil", desc: "Editar nome e alterar senha", icon: User, route: "/configuracoes/meu-perfil" },
   ];
 
   return (
