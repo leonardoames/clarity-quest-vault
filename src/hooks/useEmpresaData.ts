@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useToast } from "@/hooks/use-toast";
+import { logAcao } from "@/lib/audit";
 
 type TableName = "fornecedores" | "clientes" | "categorias_financeiras" | "centros_custo" | "contas_caixa" | "socios" | "contas_pagar" | "contas_receber" | "movimentacoes_societarias" | "distribuicoes_lucro" | "fechamentos_mensais" | "distribuicao_lucro_socios";
 
@@ -68,6 +69,16 @@ export function useEmpresaData<T extends Record<string, unknown>>(
       return null;
     }
     toast({ title: "Salvo com sucesso" });
+
+    // Audit log
+    logAcao({
+      tabela: table,
+      acao: "criar",
+      registro_id: result.id,
+      empresa_id: empresaAtual.id,
+      detalhes: { dados: record },
+    });
+
     fetchData();
     return result as T;
   };
@@ -81,6 +92,16 @@ export function useEmpresaData<T extends Record<string, unknown>>(
       return false;
     }
     toast({ title: "Atualizado com sucesso" });
+
+    // Audit log
+    logAcao({
+      tabela: table,
+      acao: "atualizar",
+      registro_id: id,
+      empresa_id: empresaAtual?.id,
+      detalhes: { alteracoes: record },
+    });
+
     fetchData();
     return true;
   };
