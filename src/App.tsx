@@ -17,6 +17,13 @@ import DRE from "./pages/DRE";
 import Fechamento from "./pages/Fechamento";
 import Configuracoes from "./pages/Configuracoes";
 import GestaoUsuarios from "./pages/GestaoUsuarios";
+import CadastroEmpresas from "./pages/cadastros/CadastroEmpresas";
+import CadastroFornecedores from "./pages/cadastros/CadastroFornecedores";
+import CadastroClientes from "./pages/cadastros/CadastroClientes";
+import CadastroCategorias from "./pages/cadastros/CadastroCategorias";
+import CadastroCentrosCusto from "./pages/cadastros/CadastroCentrosCusto";
+import CadastroContasCaixa from "./pages/cadastros/CadastroContasCaixa";
+import CadastroSocios from "./pages/cadastros/CadastroSocios";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,7 +43,6 @@ function AppRoutes() {
     return <Login />;
   }
 
-  // Force password reset for users with must_reset_password flag
   if (user.user_metadata?.must_reset_password) {
     return <ResetSenha />;
   }
@@ -54,6 +60,13 @@ function AppRoutes() {
           <Route path="/fechamento" element={<Fechamento />} />
           <Route path="/configuracoes" element={<Configuracoes />} />
           <Route path="/configuracoes/usuarios" element={<GestaoUsuarios />} />
+          <Route path="/configuracoes/empresas" element={<CadastroEmpresas />} />
+          <Route path="/configuracoes/fornecedores" element={<CadastroFornecedores />} />
+          <Route path="/configuracoes/clientes" element={<CadastroClientes />} />
+          <Route path="/configuracoes/categorias" element={<CadastroCategorias />} />
+          <Route path="/configuracoes/centros-custo" element={<CadastroCentrosCusto />} />
+          <Route path="/configuracoes/contas-caixa" element={<CadastroContasCaixa />} />
+          <Route path="/configuracoes/socios" element={<CadastroSocios />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Layout>
