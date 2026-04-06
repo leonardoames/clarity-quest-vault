@@ -242,7 +242,7 @@ export default function Importacao() {
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [validatedRows, setValidatedRows] = useState<ValidatedRow[]>([]);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ success: number; errors: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ success: number; errors: number; dbError?: string } | null>(null);
   const [pastImports, setPastImports] = useState<any[]>([]);
   const [reverting, setReverting] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -345,61 +345,87 @@ export default function Importacao() {
 
     // 3. Insert records in batches of 50
     let successCount = 0;
+    let dbError: string | undefined;
 
     if (importType === "contas_pagar" || importType === "contas_receber") {
       const table = importType;
-      const records = validRows.map((r) => {
+
+      const buildRec = (r: ValidatedRow) => {
         const v = r.values;
         const vencimento = parseDate(v.vencimento) || "";
         const competencia = v.competencia || deriveCompetencia(vencimento);
         const status = v.status ? parseStatus(v.status, importType) : "pendente";
-
-        // data_movimento: usa o campo mapeado; se não informado mas status é pago/recebido,
-        // usa o vencimento para que o registro apareça no Fluxo de Caixa
         const isPago = status === "pago" || status === "recebido";
         const dataMovimento = parseDate(v.data_movimento) || (isPago ? vencimento : null);
 
-        const base: any = {
-          empresa_id: empresaAtual.id,
+        // Campos obrigatórios (sempre presentes no schema original)
+        const rec: any = {
+          empresa_id: empresaAtual!.id,
           descricao: v.descricao,
           valor: parseNumber(v.valor) || 0,
           vencimento,
           competencia: competencia || null,
-          forma_pagamento: v.forma_pagamento || null,
-          nota_fiscal: v.nota_fiscal || null,
-          data_movimento: dataMovimento,
-          data_prevista: parseDate(v.data_prevista) || null,
-          valor_original: v.valor_original ? parseNumber(v.valor_original) : null,
-          juros: parseNumber(v.juros) || 0,
-          multa: parseNumber(v.multa) || 0,
-          desconto: parseNumber(v.desconto) || 0,
-          taxas: parseNumber(v.taxas) || 0,
           categoria_id: v.categoria ? findId(categorias, v.categoria) : null,
           observacoes: v.observacoes || null,
           status,
-          origem_lancamento: "importacao",
           ...(importacaoId ? { importacao_id: importacaoId } : {}),
         };
 
-        if (importType === "contas_pagar") {
-          base.fornecedor_id = v.fornecedor ? findId(fornecedores, v.fornecedor) : null;
-          if (status === "pago") base.data_pagamento = dataMovimento;
-        } else {
-          base.cliente_id = v.cliente ? findId(clientes, v.cliente) : null;
-          if (status === "recebido") base.data_recebimento = dataMovimento;
-        }
-        return base;
-      });
+        // Campos do schema expandido — enviados apenas quando têm valor,
+        // para não quebrar se a migration ainda não foi aplicada
+        if (v.forma_pagamento) rec.forma_pagamento = v.forma_pagamento;
+        if (v.nota_fiscal) rec.nota_fiscal = v.nota_fiscal;
+        if (dataMovimento) rec.data_movimento = dataMovimento;
+        if (parseDate(v.data_prevista)) rec.data_prevista = parseDate(v.data_prevista);
+        const vOrig = parseNumber(v.valor_original);
+        if (vOrig != null) rec.valor_original = vOrig;
+        const juros = parseNumber(v.juros);
+        if (juros) rec.juros = juros;
+        const multa = parseNumber(v.multa);
+        if (multa) rec.multa = multa;
+        const desconto = parseNumber(v.desconto);
+        if (desconto) rec.desconto = desconto;
+        const taxas = parseNumber(v.taxas);
+        if (taxas) rec.taxas = taxas;
 
-      for (let i = 0; i < records.length; i += 50) {
-        const { error } = await (supabase.from(table) as any).insert(records.slice(i, i + 50));
-        if (!error) successCount += Math.min(50, records.length - i);
+        if (importType === "contas_pagar") {
+          rec.fornecedor_id = v.fornecedor ? findId(fornecedores, v.fornecedor) : null;
+          if (status === "pago" && dataMovimento) rec.data_pagamento = dataMovimento;
+        } else {
+          rec.cliente_id = v.cliente ? findId(clientes, v.cliente) : null;
+          if (status === "recebido" && dataMovimento) rec.data_recebimento = dataMovimento;
+        }
+        return rec;
+      };
+
+      // Testa um único registro primeiro para capturar erros de schema antes do batch
+      if (validRows.length > 0) {
+        const { error: testErr } = await (supabase.from(table) as any)
+          .insert(buildRec(validRows[0]))
+          .select("id")
+          .single();
+
+        if (testErr) {
+          dbError = testErr.message;
+        } else {
+          successCount = 1;
+          // Restante em lotes de 50
+          for (let i = 1; i < validRows.length; i += 50) {
+            const batch = validRows.slice(i, i + 50).map(buildRec);
+            const { error: batchErr } = await (supabase.from(table) as any).insert(batch);
+            if (batchErr) {
+              if (!dbError) dbError = batchErr.message;
+            } else {
+              successCount += batch.length;
+            }
+          }
+        }
       }
     } else if (importType === "aportes") {
       const records = validRows.map((r) => {
         const v = r.values;
         return {
-          empresa_id: empresaAtual.id,
+          empresa_id: empresaAtual!.id,
           descricao: v.descricao,
           valor: parseNumber(v.valor) || 0,
           data: parseDate(v.data) || "",
@@ -412,22 +438,27 @@ export default function Importacao() {
       });
 
       for (let i = 0; i < records.length; i += 50) {
-        const { error } = await (supabase.from("movimentacoes_societarias") as any).insert(records.slice(i, i + 50));
-        if (!error) successCount += Math.min(50, records.length - i);
+        const { error: batchErr } = await (supabase.from("movimentacoes_societarias") as any).insert(records.slice(i, i + 50));
+        if (batchErr) { if (!dbError) dbError = batchErr.message; }
+        else successCount += Math.min(50, records.length - i);
       }
     }
 
-    // 4. Atualiza status do registro de rastreamento (se existir)
+    // 4. Atualiza rastreamento (se existir)
     if (importacaoId) {
       await (supabase.from("importacoes_planilhas") as any)
-        .update({ status: "concluido", linhas_validas: successCount })
+        .update({ status: dbError ? "erro" : "concluido", linhas_validas: successCount })
         .eq("id", importacaoId);
     }
 
-    setImportResult({ success: successCount, errors: validRows.length - successCount });
+    setImportResult({ success: successCount, errors: validRows.length - successCount, dbError });
     setImporting(false);
     fetchPastImports();
-    toast({ title: `${successCount} registros importados com sucesso` });
+    if (dbError) {
+      toast({ title: "Erro ao inserir no banco", description: dbError, variant: "destructive" });
+    } else {
+      toast({ title: `${successCount} registros importados com sucesso` });
+    }
   };
 
   const handleRevert = async (imp: any) => {
@@ -779,15 +810,26 @@ export default function Importacao() {
           ) : (
             <>
               <div className="flex items-center gap-3">
-                <CheckCircle className="h-6 w-6 text-success shrink-0" />
+                {importResult.dbError ? (
+                  <AlertTriangle className="h-6 w-6 text-destructive shrink-0" />
+                ) : (
+                  <CheckCircle className="h-6 w-6 text-success shrink-0" />
+                )}
                 <div>
-                  <h2 className="font-medium">Importação concluída</h2>
+                  <h2 className="font-medium">
+                    {importResult.dbError ? "Erro na importação" : "Importação concluída"}
+                  </h2>
                   <p className="text-sm text-muted-foreground">
-                    {importResult.success} registros importados com status "pendente"
+                    {importResult.success} importados
                     {importResult.errors > 0 && `, ${importResult.errors} falharam`}
                   </p>
                 </div>
               </div>
+              {importResult.dbError && (
+                <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive font-mono break-all">
+                  {importResult.dbError}
+                </div>
+              )}
               <div className="flex gap-3">
                 <Button
                   variant="outline"
