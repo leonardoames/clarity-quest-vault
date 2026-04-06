@@ -176,6 +176,29 @@ function parseStatus(val: string, tipo: ImportType): string {
   return "pendente";
 }
 
+// Tenta inserir registros; se PostgREST reclamar de coluna inexistente,
+// remove essa coluna de todos os registros e tenta de novo (até 8x).
+// Isso garante que uma migração não aplicada não trave a importação inteira.
+async function insertWithRetry(
+  table: string,
+  records: Record<string, unknown>[]
+): Promise<{ count: number; error?: string }> {
+  let recs = records.map((r) => ({ ...r }));
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { error } = await (supabase.from(table) as any).insert(recs);
+    if (!error) return { count: recs.length };
+    // Detecta "Could not find the 'coluna' column ... in the schema cache"
+    const colMatch = error.message.match(/find the '(\w+)' column/);
+    if (colMatch?.[1]) {
+      const bad = colMatch[1];
+      recs = recs.map((r) => { const c = { ...r }; delete c[bad]; return c; });
+      continue;
+    }
+    return { count: 0, error: error.message };
+  }
+  return { count: 0, error: "Falha após múltiplas tentativas de ajuste de schema" };
+}
+
 function deriveCompetencia(dateStr: string): string {
   if (!dateStr || !dateStr.match(/^\d{4}-\d{2}/)) return "";
   return dateStr.substring(0, 7);
@@ -398,28 +421,11 @@ export default function Importacao() {
         return rec;
       };
 
-      // Testa um único registro primeiro para capturar erros de schema antes do batch
-      if (validRows.length > 0) {
-        const { error: testErr } = await (supabase.from(table) as any)
-          .insert(buildRec(validRows[0]))
-          .select("id")
-          .single();
-
-        if (testErr) {
-          dbError = testErr.message;
-        } else {
-          successCount = 1;
-          // Restante em lotes de 50
-          for (let i = 1; i < validRows.length; i += 50) {
-            const batch = validRows.slice(i, i + 50).map(buildRec);
-            const { error: batchErr } = await (supabase.from(table) as any).insert(batch);
-            if (batchErr) {
-              if (!dbError) dbError = batchErr.message;
-            } else {
-              successCount += batch.length;
-            }
-          }
-        }
+      for (let i = 0; i < validRows.length; i += 50) {
+        const batch = validRows.slice(i, i + 50).map(buildRec);
+        const { count, error: batchErr } = await insertWithRetry(table, batch);
+        successCount += count;
+        if (batchErr && !dbError) dbError = batchErr;
       }
     } else if (importType === "aportes") {
       const records = validRows.map((r) => {
@@ -438,9 +444,9 @@ export default function Importacao() {
       });
 
       for (let i = 0; i < records.length; i += 50) {
-        const { error: batchErr } = await (supabase.from("movimentacoes_societarias") as any).insert(records.slice(i, i + 50));
-        if (batchErr) { if (!dbError) dbError = batchErr.message; }
-        else successCount += Math.min(50, records.length - i);
+        const { count, error: batchErr } = await insertWithRetry("movimentacoes_societarias", records.slice(i, i + 50));
+        successCount += count;
+        if (batchErr && !dbError) dbError = batchErr;
       }
     }
 
