@@ -1,14 +1,12 @@
 import {
   LayoutDashboard,
-  ArrowDownCircle,
-  ArrowUpCircle,
+  LayoutList,
   Users,
   PieChart,
   Lock,
   Settings,
   TrendingUp,
   Upload,
-  Activity,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -27,9 +25,7 @@ import {
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Contas a Pagar", url: "/contas-pagar", icon: ArrowDownCircle },
-  { title: "Contas a Receber", url: "/contas-receber", icon: ArrowUpCircle },
-  { title: "Fluxo de Caixa", url: "/fluxo-caixa", icon: Activity },
+  { title: "Lançamentos", url: "/lancamentos", icon: LayoutList },
   { title: "Importar Planilha", url: "/importacao", icon: Upload },
 ];
 

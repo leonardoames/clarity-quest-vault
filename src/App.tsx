@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,8 +9,7 @@ import { Layout } from "@/components/Layout";
 import Login from "./pages/Login";
 import ResetSenha from "./pages/ResetSenha";
 import Index from "./pages/Index";
-import ContasPagar from "./pages/ContasPagar";
-import ContasReceber from "./pages/ContasReceber";
+import Lancamentos from "./pages/Lancamentos";
 import Aportes from "./pages/Aportes";
 import Distribuicao from "./pages/Distribuicao";
 import DRE from "./pages/DRE";
@@ -25,7 +24,6 @@ import CadastroCentrosCusto from "./pages/cadastros/CadastroCentrosCusto";
 import CadastroContasCaixa from "./pages/cadastros/CadastroContasCaixa";
 import CadastroSocios from "./pages/cadastros/CadastroSocios";
 import MeuPerfil from "./pages/MeuPerfil";
-import FluxoCaixa from "./pages/FluxoCaixa";
 import Importacao from "./pages/Importacao";
 import NotFound from "./pages/NotFound";
 
@@ -55,8 +53,10 @@ function AppRoutes() {
       <Layout>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/contas-pagar" element={<ContasPagar />} />
-          <Route path="/contas-receber" element={<ContasReceber />} />
+          <Route path="/lancamentos" element={<Lancamentos />} />
+          <Route path="/contas-pagar" element={<Navigate to="/lancamentos" replace />} />
+          <Route path="/contas-receber" element={<Navigate to="/lancamentos" replace />} />
+          <Route path="/fluxo-caixa" element={<Navigate to="/lancamentos" replace />} />
           <Route path="/aportes" element={<Aportes />} />
           <Route path="/distribuicao" element={<Distribuicao />} />
           <Route path="/dre" element={<DRE />} />
@@ -71,7 +71,6 @@ function AppRoutes() {
           <Route path="/configuracoes/contas-caixa" element={<CadastroContasCaixa />} />
           <Route path="/configuracoes/socios" element={<CadastroSocios />} />
           <Route path="/configuracoes/meu-perfil" element={<MeuPerfil />} />
-          <Route path="/fluxo-caixa" element={<FluxoCaixa />} />
           <Route path="/importacao" element={<Importacao />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
