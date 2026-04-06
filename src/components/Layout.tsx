@@ -14,7 +14,6 @@ export function Layout({ children }: LayoutProps) {
   const { empresas, empresaAtual, setEmpresaAtual } = useEmpresa();
   const { signOut, user } = useAuth();
 
-  // Use mock empresas if DB is empty
   const displayEmpresas = empresas.length > 0 ? empresas : [
     { id: "mock-1", nome: "Empresa Alpha", razao_social: null, cnpj: null, ativa: true },
     { id: "mock-2", nome: "Empresa Beta", razao_social: null, cnpj: null, ativa: true },
@@ -23,13 +22,17 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center justify-between border-b border-border px-4 bg-card/50 backdrop-blur-sm shrink-0">
+          {/* Linha laranja no topo do header */}
+          <div className="h-[2px] w-full bg-gradient-to-r from-primary via-warning to-transparent shrink-0" />
+
+          <header className="h-13 flex items-center justify-between border-b border-border px-4 bg-card/40 backdrop-blur-sm shrink-0" style={{ height: '52px' }}>
             <div className="flex items-center gap-2">
-              <SidebarTrigger className="text-muted-foreground" />
+              <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
             </div>
+
             <div className="flex items-center gap-3">
               <Select
                 value={empresaAtual?.id || displayEmpresas[0]?.id}
@@ -38,24 +41,34 @@ export function Layout({ children }: LayoutProps) {
                   if (emp) setEmpresaAtual(emp);
                 }}
               >
-                <SelectTrigger className="w-[200px] h-9 bg-secondary border-border text-sm">
-                  <Building2 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                <SelectTrigger className="w-[190px] h-8 bg-secondary border-border text-xs font-medium">
+                  <Building2 className="h-3 w-3 mr-1.5 text-muted-foreground shrink-0" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {displayEmpresas.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                    <SelectItem key={e.id} value={e.id} className="text-xs">{e.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <span className="text-xs text-muted-foreground hidden md:block truncate max-w-[150px]">
-                {user?.email}
-              </span>
-              <Button variant="ghost" size="icon" onClick={signOut} className="text-muted-foreground hover:text-destructive">
-                <LogOut className="h-4 w-4" />
+
+              {user?.email && (
+                <span className="text-[11px] text-muted-foreground hidden md:block truncate max-w-[140px]">
+                  {user.email}
+                </span>
+              )}
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={signOut}
+                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <LogOut className="h-3.5 w-3.5" />
               </Button>
             </div>
           </header>
+
           <main className="flex-1 p-6 overflow-auto">
             {children}
           </main>

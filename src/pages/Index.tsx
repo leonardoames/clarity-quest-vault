@@ -14,8 +14,12 @@ import {
 } from "recharts";
 
 const CHART_COLORS = [
-  "hsl(160, 84%, 39%)", "hsl(210, 100%, 56%)", "hsl(38, 92%, 50%)",
-  "hsl(0, 72%, 51%)", "hsl(280, 65%, 60%)", "hsl(180, 60%, 45%)",
+  "hsl(22, 93%, 52%)",   // laranja primário
+  "hsl(38, 92%, 50%)",   // âmbar
+  "hsl(142, 69%, 40%)",  // verde
+  "hsl(0, 72%, 51%)",    // vermelho
+  "hsl(22, 60%, 70%)",   // laranja claro
+  "hsl(0, 0%, 45%)",     // cinza
 ];
 
 export default function Dashboard() {

@@ -10,32 +10,49 @@ interface StatCardProps {
   variant?: "default" | "success" | "danger" | "warning" | "primary";
 }
 
-const variantStyles = {
-  default: "text-foreground",
-  success: "text-success",
-  danger: "text-destructive",
-  warning: "text-warning",
-  primary: "text-primary",
+const variantConfig = {
+  default:  { value: "text-foreground",          icon: "text-muted-foreground bg-secondary",         bar: "bg-muted-foreground/20" },
+  success:  { value: "text-success",              icon: "text-success bg-success/10",                 bar: "bg-success" },
+  danger:   { value: "text-destructive",          icon: "text-destructive bg-destructive/10",         bar: "bg-destructive" },
+  warning:  { value: "text-warning",              icon: "text-warning bg-warning/10",                 bar: "bg-warning" },
+  primary:  { value: "text-primary",              icon: "text-primary bg-primary/10",                 bar: "bg-primary" },
 };
 
 export function StatCard({ title, value, icon: Icon, trend, trendUp, variant = "default" }: StatCardProps) {
+  const cfg = variantConfig[variant];
+
   return (
-    <div className="stat-card animate-fade-in">
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <p className={cn("text-2xl font-bold tracking-tight", variantStyles[variant])}>
+    <div className={cn("stat-card animate-fade-up group", variant === "primary" && "border-primary/20")}>
+      {/* Accent bar top */}
+      <div className={cn("absolute top-0 left-0 h-0.5 w-0 rounded-full transition-all duration-500 group-hover:w-full", cfg.bar)} />
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2 min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium truncate"
+             style={{ letterSpacing: '0.08em' }}>
+            {title}
+          </p>
+          <p
+            className={cn("text-2xl font-bold tracking-tight tabular-nums", cfg.value)}
+            style={{ fontFamily: 'Space Mono, monospace', letterSpacing: '-0.02em' }}
+          >
             {value}
           </p>
         </div>
-        <div className={cn("p-2 rounded-lg bg-secondary", variantStyles[variant])}>
-          <Icon className="h-5 w-5" />
+        <div className={cn("p-2.5 rounded-lg shrink-0 transition-all duration-300", cfg.icon)}>
+          <Icon className="h-4 w-4" />
         </div>
       </div>
+
       {trend && (
-        <p className={cn("text-xs mt-3", trendUp ? "text-success" : "text-destructive")}>
-          {trend}
-        </p>
+        <div className="mt-3 flex items-center gap-1.5">
+          <span className={cn(
+            "text-xs font-medium",
+            trendUp ? "text-success" : "text-destructive"
+          )}>
+            {trendUp ? "▲" : "▼"} {trend}
+          </span>
+        </div>
       )}
     </div>
   );
