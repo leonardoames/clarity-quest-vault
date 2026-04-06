@@ -25,6 +25,7 @@ import CadastroCentrosCusto from "./pages/cadastros/CadastroCentrosCusto";
 import CadastroContasCaixa from "./pages/cadastros/CadastroContasCaixa";
 import CadastroSocios from "./pages/cadastros/CadastroSocios";
 import MeuPerfil from "./pages/MeuPerfil";
+import Importacao from "./pages/Importacao";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -69,6 +70,7 @@ function AppRoutes() {
           <Route path="/configuracoes/contas-caixa" element={<CadastroContasCaixa />} />
           <Route path="/configuracoes/socios" element={<CadastroSocios />} />
           <Route path="/configuracoes/meu-perfil" element={<MeuPerfil />} />
+          <Route path="/importacao" element={<Importacao />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Layout>
