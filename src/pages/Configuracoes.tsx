@@ -12,7 +12,7 @@ export default function Configuracoes() {
     { title: "Fornecedores", desc: "Cadastro de fornecedores", icon: Wallet, route: "/configuracoes/fornecedores" },
     { title: "Categorias Financeiras", desc: "Classificação de receitas e despesas", icon: Tags, route: "/configuracoes/categorias" },
     { title: "Centros de Custo", desc: "Centros de custo para rateio", icon: Target, route: "/configuracoes/centros-custo" },
-    { title: "Contas de Caixa", desc: "Contas internas de caixa", icon: CreditCard, route: "/configuracoes/contas-caixa" },
+    { title: "Contas Bancárias", desc: "Contas bancárias para classificação de lançamentos", icon: CreditCard, route: "/configuracoes/contas-caixa" },
     { title: "Importar Planilha", desc: "Importe CSV ou XLSX de contas, receitas e aportes", icon: Upload, route: "/importacao" },
     { title: "Meu Perfil", desc: "Editar nome e alterar senha", icon: User, route: "/configuracoes/meu-perfil" },
   ];
