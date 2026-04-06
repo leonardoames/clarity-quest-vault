@@ -88,7 +88,7 @@ export default function Lancamentos() {
     });
   const { data: contasReceber, loading: lreceber, insert: insertReceber, update: updateReceber } =
     useEmpresaData<any>("contas_receber", {
-      select: "*, clientes(nome), categorias_financeiras(nome), centros_custo(nome), contas_caixa(nome, banco)",
+      select: "*, clientes(nome), categorias_financeiras(nome), contas_caixa(nome, banco)",
     });
   const { data: fornecedores, insert: insertFornecedor } = useEmpresaData<any>("fornecedores", { orderBy: "nome" });
   const { data: clientes, insert: insertCliente } = useEmpresaData<any>("clientes", { orderBy: "nome" });
