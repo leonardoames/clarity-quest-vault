@@ -310,28 +310,26 @@ export default function Importacao() {
 
     const validRows = validatedRows.filter((r) => r.valid);
 
-    // 1. Create importacao record
-    const { data: importRec, error: importErr } = await (supabase.from("importacoes_planilhas") as any)
-      .insert({
-        empresa_id: empresaAtual.id,
-        tipo: importType,
-        nome_arquivo: file?.name || null,
-        total_linhas: rows.length,
-        linhas_validas: validRows.length,
-        linhas_com_erro: rows.length - validRows.length,
-        status: "processando",
-        criado_por: user.id,
-      })
-      .select()
-      .single();
-
-    if (importErr || !importRec) {
-      toast({ title: "Erro ao iniciar importação", variant: "destructive" });
-      setImporting(false);
-      return;
+    // 1. Tenta criar registro de rastreamento (não-bloqueante — RLS pode impedir em alguns planos)
+    let importacaoId: string | null = null;
+    try {
+      const { data: importRec } = await (supabase.from("importacoes_planilhas") as any)
+        .insert({
+          empresa_id: empresaAtual.id,
+          tipo: importType,
+          nome_arquivo: file?.name || null,
+          total_linhas: rows.length,
+          linhas_validas: validRows.length,
+          linhas_com_erro: rows.length - validRows.length,
+          status: "processando",
+          criado_por: user.id,
+        })
+        .select()
+        .single();
+      if (importRec?.id) importacaoId = importRec.id;
+    } catch {
+      // Segue sem rastreamento
     }
-
-    const importacaoId = importRec.id;
 
     // 2. Fetch lookup data for name matching
     const [{ data: fornecedores }, { data: clientes }, { data: socios }, { data: categorias }] =
@@ -363,7 +361,7 @@ export default function Importacao() {
           categoria_id: v.categoria ? findId(categorias, v.categoria) : null,
           observacoes: v.observacoes || null,
           status: v.status ? parseStatus(v.status, importType) : "pendente",
-          importacao_id: importacaoId,
+          ...(importacaoId ? { importacao_id: importacaoId } : {}),
         };
         if (importType === "contas_pagar") {
           base.fornecedor_id = v.fornecedor ? findId(fornecedores, v.fornecedor) : null;
@@ -389,7 +387,7 @@ export default function Importacao() {
           tipo: v.tipo as any,
           observacoes: v.observacoes || null,
           status: "pendente" as any,
-          importacao_id: importacaoId,
+          ...(importacaoId ? { importacao_id: importacaoId } : {}),
         };
       });
 
@@ -399,10 +397,12 @@ export default function Importacao() {
       }
     }
 
-    // 4. Update importacao status
-    await (supabase.from("importacoes_planilhas") as any)
-      .update({ status: "concluido", linhas_validas: successCount })
-      .eq("id", importacaoId);
+    // 4. Atualiza status do registro de rastreamento (se existir)
+    if (importacaoId) {
+      await (supabase.from("importacoes_planilhas") as any)
+        .update({ status: "concluido", linhas_validas: successCount })
+        .eq("id", importacaoId);
+    }
 
     setImportResult({ success: successCount, errors: validRows.length - successCount });
     setImporting(false);
@@ -742,7 +742,11 @@ export default function Importacao() {
                 )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Status dos registros</span>
-                  <span className="font-medium">Pendente (aguarda aprovação)</span>
+                  <span className="font-medium">
+                    {SYSTEM_FIELDS[importType].some((f) => f.name === "status") && mapping["status"]
+                      ? "Conforme coluna mapeada na planilha"
+                      : "Pendente (padrão)"}
+                  </span>
                 </div>
               </div>
               <div className="flex gap-3">
