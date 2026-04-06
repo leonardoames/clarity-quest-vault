@@ -58,6 +58,7 @@ export default function Lancamentos() {
   const { toast } = useToast();
 
   // Filters
+  const [periodoTipo, setPeriodoTipo] = useState<"tudo" | "7dias" | "30dias" | "mes">("tudo");
   const [mes, setMes] = useState(mesAno(new Date()));
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState("todos");
@@ -105,7 +106,18 @@ export default function Lancamentos() {
 
     return [...pagar, ...receber]
       .filter((c) => {
-        if (c.competencia !== mes) return false;
+        // Period filter
+        if (periodoTipo === "mes") {
+          const matchesComp = c.competencia === mes;
+          const matchesVenc = !c.competencia && (c.vencimento || "").startsWith(mes);
+          if (!matchesComp && !matchesVenc) return false;
+        } else if (periodoTipo === "7dias" || periodoTipo === "30dias") {
+          const days = periodoTipo === "7dias" ? 7 : 30;
+          const cutoff = new Date(Date.now() - days * 86400000).toISOString().split("T")[0];
+          const date = c.vencimento || (c.competencia ? c.competencia + "-01" : null);
+          if (!date || date < cutoff) return false;
+        }
+        // "tudo" — sem filtro de data
         if (filtroTipo !== "todos" && c._tipo !== filtroTipo) return false;
         if (modoExtrato) {
           if (!["pago", "recebido"].includes(c.status)) return false;
@@ -132,7 +144,7 @@ export default function Lancamentos() {
           : (b.vencimento || "");
         return da.localeCompare(db);
       });
-  }, [contasPagar, contasReceber, mes, filtroTipo, filtroStatus, filtroCategoria, filtroConta, busca, modoExtrato]);
+  }, [contasPagar, contasReceber, periodoTipo, mes, filtroTipo, filtroStatus, filtroCategoria, filtroConta, busca, modoExtrato]);
 
   const totalSaidas = useMemo(
     () => lancamentos.filter((c) => c._tipo === "pagar").reduce((s: number, c: any) => s + Number(c.valor || 0), 0),
@@ -305,7 +317,11 @@ export default function Lancamentos() {
         <div>
           <h1 className="page-title">Lançamentos</h1>
           <p className="text-sm text-muted-foreground mt-1 capitalize">
-            {lancamentos.length} registro(s) · {labelMes(mes)}
+            {lancamentos.length} registro(s) ·{" "}
+            {periodoTipo === "mes" ? labelMes(mes)
+              : periodoTipo === "7dias" ? "últimos 7 dias"
+              : periodoTipo === "30dias" ? "últimos 30 dias"
+              : "todo o período"}
           </p>
         </div>
         <div className="flex gap-2">
@@ -328,16 +344,31 @@ export default function Lancamentos() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Month navigation */}
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navMes(-1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-sm font-medium min-w-[150px] text-center capitalize">{labelMes(mes)}</span>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navMes(1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        {/* Period selector */}
+        <Select value={periodoTipo} onValueChange={(v) => setPeriodoTipo(v as typeof periodoTipo)}>
+          <SelectTrigger className="w-[150px] bg-secondary border-border">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tudo">Todo o período</SelectItem>
+            <SelectItem value="7dias">Últimos 7 dias</SelectItem>
+            <SelectItem value="30dias">Últimos 30 dias</SelectItem>
+            <SelectItem value="mes">Mês específico</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Month navigation — só aparece quando período = mes */}
+        {periodoTipo === "mes" && (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navMes(-1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium min-w-[150px] text-center capitalize">{labelMes(mes)}</span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navMes(1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
         {/* Search */}
         <div className="relative flex-1 min-w-[160px] max-w-xs">

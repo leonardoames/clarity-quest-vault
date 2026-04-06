@@ -22,6 +22,8 @@ interface Empresa {
   data_inicio_operacional: string | null;
   segmento: string | null;
   observacoes_internas: string | null;
+  cor_principal: string | null;
+  logo_url: string | null;
   ativa: boolean;
 }
 
@@ -33,6 +35,8 @@ interface FormState {
   data_inicio_operacional: string;
   segmento: string;
   observacoes_internas: string;
+  cor_principal: string;
+  logo_url: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -43,6 +47,8 @@ const EMPTY_FORM: FormState = {
   data_inicio_operacional: "",
   segmento: "",
   observacoes_internas: "",
+  cor_principal: "#f97316",
+  logo_url: "",
 };
 
 const MOEDAS = [
@@ -60,6 +66,8 @@ function empresaToForm(e: Empresa): FormState {
     data_inicio_operacional: e.data_inicio_operacional || "",
     segmento: e.segmento || "",
     observacoes_internas: e.observacoes_internas || "",
+    cor_principal: e.cor_principal || "#f97316",
+    logo_url: e.logo_url || "",
   };
 }
 
@@ -133,6 +141,42 @@ function EmpresaForm({ form, onChange }: { form: FormState; onChange: (f: FormSt
             className="bg-secondary border-border resize-none"
           />
         </div>
+
+        {/* Personalização visual */}
+        <div className="space-y-2">
+          <Label>Cor Principal</Label>
+          <div className="flex gap-2 items-center">
+            <input
+              type="color"
+              value={form.cor_principal || "#f97316"}
+              onChange={(e) => onChange({ ...form, cor_principal: e.target.value })}
+              className="h-9 w-12 rounded border border-border cursor-pointer bg-secondary p-0.5 shrink-0"
+            />
+            <Input
+              value={form.cor_principal}
+              onChange={(e) => onChange({ ...form, cor_principal: e.target.value })}
+              className="bg-secondary border-border"
+              placeholder="#f97316"
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Logo (URL da imagem)</Label>
+          <Input
+            value={form.logo_url}
+            onChange={(e) => onChange({ ...form, logo_url: e.target.value })}
+            className="bg-secondary border-border"
+            placeholder="https://..."
+          />
+          {form.logo_url && (
+            <img
+              src={form.logo_url}
+              alt="preview"
+              className="h-8 max-w-[120px] object-contain rounded border border-border"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -180,6 +224,8 @@ export default function CadastroEmpresas() {
       data_inicio_operacional: createForm.data_inicio_operacional || null,
       segmento: createForm.segmento || null,
       observacoes_internas: createForm.observacoes_internas || null,
+      cor_principal: createForm.cor_principal || "#f97316",
+      logo_url: createForm.logo_url || null,
     });
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -210,6 +256,8 @@ export default function CadastroEmpresas() {
         data_inicio_operacional: editForm.data_inicio_operacional || null,
         segmento: editForm.segmento || null,
         observacoes_internas: editForm.observacoes_internas || null,
+        cor_principal: editForm.cor_principal || "#f97316",
+        logo_url: editForm.logo_url || null,
       })
       .eq("id", editTarget.id);
     if (error) {

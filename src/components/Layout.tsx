@@ -20,13 +20,18 @@ export function Layout({ children }: LayoutProps) {
     { id: "mock-3", nome: "Empresa Gamma", razao_social: null, cnpj: null, ativa: true },
   ];
 
+  const corPrincipal = empresaAtual?.cor_principal || "#f97316";
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Linha laranja no topo do header */}
-          <div className="h-[2px] w-full bg-gradient-to-r from-primary via-warning to-transparent shrink-0" />
+          {/* Linha colorida no topo — usa cor da empresa */}
+          <div
+            className="h-[2px] w-full shrink-0"
+            style={{ background: `linear-gradient(to right, ${corPrincipal}, transparent)` }}
+          />
 
           <header className="h-13 flex items-center justify-between border-b border-border px-4 bg-card/40 backdrop-blur-sm shrink-0" style={{ height: '52px' }}>
             <div className="flex items-center gap-2">
@@ -42,7 +47,15 @@ export function Layout({ children }: LayoutProps) {
                 }}
               >
                 <SelectTrigger className="w-[190px] h-8 bg-secondary border-border text-xs font-medium">
-                  <Building2 className="h-3 w-3 mr-1.5 text-muted-foreground shrink-0" />
+                  {empresaAtual?.logo_url ? (
+                    <img
+                      src={empresaAtual.logo_url}
+                      alt=""
+                      className="h-4 w-4 object-contain rounded shrink-0 mr-1.5"
+                    />
+                  ) : (
+                    <Building2 className="h-3 w-3 mr-1.5 text-muted-foreground shrink-0" />
+                  )}
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

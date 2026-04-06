@@ -8,6 +8,8 @@ interface Empresa {
   razao_social: string | null;
   cnpj: string | null;
   ativa: boolean;
+  cor_principal?: string | null;
+  logo_url?: string | null;
 }
 
 interface EmpresaContextType {
