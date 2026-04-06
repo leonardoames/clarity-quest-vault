@@ -17,7 +17,7 @@ import * as XLSX from "xlsx";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ImportType = "contas_pagar" | "contas_receber" | "aportes";
+type ImportType = "contas_pagar" | "contas_receber" | "aportes" | "extrato";
 type Step = 1 | 2 | 3 | 4;
 
 interface SystemField {
@@ -91,12 +91,20 @@ const SYSTEM_FIELDS: Record<ImportType, SystemField[]> = {
     },
     { name: "observacoes", label: "Observações", required: false, type: "text", keywords: ["obs", "nota", "coment"] },
   ],
+  extrato: [
+    { name: "descricao",   label: "Descrição",                                          required: true,  type: "text",   keywords: ["descri", "histor", "lancam", "memorial", "detalhe", "movimento"] },
+    { name: "valor",       label: "Valor (negativo = despesa, positivo = receita)",      required: true,  type: "number", keywords: ["valor", "montante", "amount", "credito", "debito", "movim"] },
+    { name: "data",        label: "Data",                                               required: true,  type: "date",   keywords: ["data", "date", "lancam", "operac"] },
+    { name: "categoria",   label: "Categoria",                                          required: false, type: "text",   keywords: ["categ", "classif", "grupo"] },
+    { name: "observacoes", label: "Observações",                                        required: false, type: "text",   keywords: ["obs", "coment", "detalhe"] },
+  ],
 };
 
 const TYPE_LABELS: Record<ImportType, string> = {
-  contas_pagar: "Contas a Pagar",
+  contas_pagar:   "Contas a Pagar",
   contas_receber: "Contas a Receber",
-  aportes: "Aportes e Movimentações",
+  aportes:        "Aportes e Movimentações",
+  extrato:        "Extrato Bancário (auto-split)",
 };
 
 const STEP_LABELS = ["Tipo e Arquivo", "Mapeamento", "Validação", "Importar"];
@@ -448,6 +456,40 @@ export default function Importacao() {
         successCount += count;
         if (batchErr && !dbError) dbError = batchErr;
       }
+    } else if (importType === "extrato") {
+      // Extrato bancário: valor negativo → contas_pagar, positivo → contas_receber
+      const today = new Date().toISOString().split("T")[0];
+      const pagRecords: any[] = [];
+      const recRecords: any[] = [];
+
+      for (const r of validRows) {
+        const v = r.values;
+        const valor = parseNumber(v.valor) ?? 0;
+        const vencimento = parseDate(v.data) || today;
+        const rec = {
+          empresa_id: empresaAtual!.id,
+          descricao: v.descricao,
+          valor: Math.abs(valor),
+          vencimento,
+          competencia: deriveCompetencia(vencimento) || null,
+          observacoes: v.observacoes || null,
+          status: "pendente",
+          ...(importacaoId ? { importacao_id: importacaoId } : {}),
+        };
+        if (valor < 0) pagRecords.push(rec);
+        else recRecords.push(rec);
+      }
+
+      for (let i = 0; i < pagRecords.length; i += 50) {
+        const { count, error: e } = await insertWithRetry("contas_pagar", pagRecords.slice(i, i + 50));
+        successCount += count;
+        if (e && !dbError) dbError = e;
+      }
+      for (let i = 0; i < recRecords.length; i += 50) {
+        const { count, error: e } = await insertWithRetry("contas_receber", recRecords.slice(i, i + 50));
+        successCount += count;
+        if (e && !dbError) dbError = e;
+      }
     }
 
     // 4. Atualiza rastreamento (se existir)
@@ -497,6 +539,7 @@ export default function Importacao() {
     const header = fields.map((f) => f.label);
     const example = fields.map((f) => {
       if (f.name === "status") return "Pendente";
+      if (f.name === "valor" && importType === "extrato") return "-1.500,00";
       if (f.type === "number") return "1.500,00";
       if (f.type === "date") return "31-12-2026";
       if (f.type === "enum") return f.enumValues?.[0] || "";
@@ -576,8 +619,9 @@ export default function Importacao() {
                 >
                   <p className="font-medium text-sm">{TYPE_LABELS[t]}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {t === "contas_pagar" ? "Despesas, pagamentos, obrigações" :
+                    {t === "contas_pagar"   ? "Despesas, pagamentos, obrigações" :
                      t === "contas_receber" ? "Receitas, cobranças, créditos" :
+                     t === "extrato"        ? "Valor negativo=despesa, positivo=receita" :
                      "Aportes, retiradas, empréstimos"}
                   </p>
                 </button>
