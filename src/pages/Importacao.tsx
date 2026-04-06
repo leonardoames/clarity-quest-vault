@@ -54,6 +54,7 @@ const SYSTEM_FIELDS: Record<ImportType, SystemField[]> = {
     { name: "multa", label: "Multa (R$)", required: false, type: "number", keywords: ["multa", "penalid", "mora"] },
     { name: "desconto", label: "Desconto (R$)", required: false, type: "number", keywords: ["desconto", "discount", "abatim"] },
     { name: "taxas", label: "Taxas (R$)", required: false, type: "number", keywords: ["taxa", "fee", "tarifas", "encargo"] },
+    { name: "status", label: "Status / Situação", required: false, type: "text", keywords: ["status", "situac", "estado", "situacao", "pago", "quitad"] },
     { name: "observacoes", label: "Observações", required: false, type: "text", keywords: ["obs", "coment", "remark", "detalhe"] },
   ],
   contas_receber: [
@@ -72,6 +73,7 @@ const SYSTEM_FIELDS: Record<ImportType, SystemField[]> = {
     { name: "multa", label: "Multa (R$)", required: false, type: "number", keywords: ["multa", "penalid", "mora"] },
     { name: "desconto", label: "Desconto (R$)", required: false, type: "number", keywords: ["desconto", "discount", "abatim"] },
     { name: "taxas", label: "Taxas (R$)", required: false, type: "number", keywords: ["taxa", "fee", "tarifas", "encargo"] },
+    { name: "status", label: "Status / Situação", required: false, type: "text", keywords: ["status", "situac", "estado", "situacao", "recebid", "quitad"] },
     { name: "observacoes", label: "Observações", required: false, type: "text", keywords: ["obs", "coment", "detalhe"] },
   ],
   aportes: [
@@ -119,27 +121,59 @@ function parseDate(val: string): string | null {
   if (!v) return null;
   // ISO: YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-  // BR: DD/MM/YYYY or D/M/YYYY
-  const brMatch = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (brMatch) {
-    const [, d, m, y] = brMatch;
+  // BR barra: DD/MM/YYYY ou D/M/YYYY
+  const brSlash = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (brSlash) {
+    const [, d, m, y] = brSlash;
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
-  // DD-MM-YYYY
-  const dmyDash = v.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-  if (dmyDash) {
-    const [, d, m, y] = dmyDash;
-    return `${y}-${m}-${d}`;
+  // BR traço: DD-MM-YYYY ou D-M-YYYY (padrão ABNT)
+  const brDash = v.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (brDash) {
+    const [, d, m, y] = brDash;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  // DD.MM.YYYY
+  const brDot = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (brDot) {
+    const [, d, m, y] = brDot;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
   return null;
 }
 
 function parseNumber(val: string): number | null {
   if (!val) return null;
-  // Remove currency symbols, spaces, then handle BR decimal separator
-  const cleaned = val.replace(/[R$\s%]/g, "").replace(/\./g, "").replace(",", ".");
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? null : n;
+  const s = val.trim();
+  // Detecta notação de negativo com parênteses: (1.500,00) → -1500.00
+  const isParenNeg = s.startsWith("(") && s.endsWith(")");
+  // Remove símbolos monetários, espaços, parênteses
+  const cleaned = s.replace(/[R$\s%()]/g, "");
+  // Formato BR: ponto = milhar, vírgula = decimal  →  remove pontos, troca vírgula por ponto
+  const normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(normalized);
+  if (isNaN(n)) return null;
+  return isParenNeg && n > 0 ? -n : n;
+}
+
+// Mapeia texto livre de status para o enum do sistema
+function parseStatus(val: string, tipo: ImportType): string {
+  const v = normalizeStr(val || "").replace(/[^a-z\s]/g, "").trim();
+  if (!v) return "pendente";
+
+  if (/recebid/.test(v)) return "recebido";
+  if (/pago|quitado|liquidado|baixado|concluido/.test(v)) {
+    return tipo === "contas_receber" ? "recebido" : "pago";
+  }
+  if (/vencido|atraso|inadimpl/.test(v)) return "vencido";
+  if (/aprovado|autorizado/.test(v)) return "aprovado";
+  if (/cancelado|anulado|estornado/.test(v)) return "cancelado";
+  if (/perdido|irrecuperavel/.test(v)) return "perdido";
+  if (/rascunho|draft/.test(v)) return "rascunho";
+  // "a pagar", "a receber", "em aberto", "pendente", "aberto"
+  if (/pendente|aberto|pagar|receber/.test(v)) return "pendente";
+
+  return "pendente";
 }
 
 function deriveCompetencia(dateStr: string): string {
@@ -177,10 +211,10 @@ function validateRow(
 
     if (field.type === "number") {
       const n = parseNumber(val);
-      if (n === null || n <= 0) errors.push(`"${field.label}" inválido: "${val}"`);
+      if (n === null) errors.push(`"${field.label}" inválido: "${val}" (use formato 1.500,00 ou -500,00)`);
     }
     if (field.type === "date") {
-      if (!parseDate(val)) errors.push(`Data inválida em "${field.label}": "${val}" (use DD/MM/AAAA)`);
+      if (!parseDate(val)) errors.push(`Data inválida em "${field.label}": "${val}" (use DD-MM-AAAA)`);
     }
     if (field.type === "enum" && field.enumValues) {
       if (!field.enumValues.includes(val)) {
@@ -231,7 +265,9 @@ export default function Importacao() {
 
   const parseFile = async (f: File): Promise<{ hdrs: string[]; dataRows: string[][] }> => {
     const buffer = await f.arrayBuffer();
-    const wb = XLSX.read(buffer, { type: "array", raw: false });
+    const isCsv = f.name.toLowerCase().endsWith(".csv");
+    // CSV: tenta Windows-1252 (ABNT) para suportar acentos e cedilha
+    const wb = XLSX.read(buffer, { type: "array", raw: false, codepage: isCsv ? 1252 : undefined });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const all: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }) as string[][];
     const hdrs = (all[0] || []).map((h) => String(h).trim()).filter(Boolean);
@@ -326,7 +362,7 @@ export default function Importacao() {
           competencia: competencia || null,
           categoria_id: v.categoria ? findId(categorias, v.categoria) : null,
           observacoes: v.observacoes || null,
-          status: "pendente",
+          status: v.status ? parseStatus(v.status, importType) : "pendente",
           importacao_id: importacaoId,
         };
         if (importType === "contas_pagar") {
@@ -403,8 +439,9 @@ export default function Importacao() {
     const fields = SYSTEM_FIELDS[importType];
     const header = fields.map((f) => f.label);
     const example = fields.map((f) => {
-      if (f.type === "number") return "1500.00";
-      if (f.type === "date") return "31/12/2026";
+      if (f.name === "status") return "Pendente";
+      if (f.type === "number") return "1.500,00";
+      if (f.type === "date") return "31-12-2026";
       if (f.type === "enum") return f.enumValues?.[0] || "";
       return "Exemplo";
     });

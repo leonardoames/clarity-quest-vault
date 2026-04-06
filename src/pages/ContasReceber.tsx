@@ -35,8 +35,13 @@ const FORMA_LABEL: Record<string, string> = {
 };
 
 type Form = Record<string, string>;
+type QuickCreate = { type: "cliente" | "categoria" | "centro_custo"; nome: string; tipo?: string };
 
 function campo(form: Form, k: string) { return form[k] || ""; }
+function toSv(v: string) { return v || "__none__"; }
+function fromSv(v: string, key: string, set: (k: string, v: string) => void) {
+  set(key, v === "__none__" ? "" : v);
+}
 
 export default function ContasReceber() {
   const { empresaAtual } = useEmpresa();
@@ -49,6 +54,8 @@ export default function ContasReceber() {
   const [showAjustes, setShowAjustes] = useState(false);
   const [showRecorrencia, setShowRecorrencia] = useState(false);
   const [form, setForm] = useState<Form>({});
+  const [qc, setQc] = useState<QuickCreate | null>(null);
+
   const sf = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const filters = filtroStatus !== "todos" ? { status: filtroStatus } : {};
@@ -56,9 +63,9 @@ export default function ContasReceber() {
     select: "*, clientes(nome), categorias_financeiras(nome), centros_custo(nome), contas_caixa(nome, banco)",
     filters,
   });
-  const { data: clientes } = useEmpresaData<any>("clientes", { orderBy: "nome" });
-  const { data: categorias } = useEmpresaData<any>("categorias_financeiras", { orderBy: "nome" });
-  const { data: centrosCusto } = useEmpresaData<any>("centros_custo", { orderBy: "nome" });
+  const { data: clientes, insert: insertCliente } = useEmpresaData<any>("clientes", { orderBy: "nome" });
+  const { data: categorias, insert: insertCategoria } = useEmpresaData<any>("categorias_financeiras", { orderBy: "nome" });
+  const { data: centrosCusto, insert: insertCentroCusto } = useEmpresaData<any>("centros_custo", { orderBy: "nome" });
   const { data: contasBancarias } = useEmpresaData<any>("contas_caixa", { orderBy: "nome" });
 
   const filtrados = contas.filter((c) => {
@@ -74,6 +81,22 @@ export default function ContasReceber() {
     if (!empresaAtual?.id) return;
     await (supabase.rpc as any)("criar_categorias_padrao", { p_empresa_id: empresaAtual.id });
     toast({ title: "Categorias padrão criadas" });
+  };
+
+  const handleQuickCreate = async () => {
+    if (!qc?.nome.trim()) return;
+    let result: any = null;
+    if (qc.type === "cliente") {
+      result = await insertCliente({ nome: qc.nome, ativo: true } as any);
+      if (result) sf("cliente_id", result.id);
+    } else if (qc.type === "categoria") {
+      result = await insertCategoria({ nome: qc.nome, tipo: qc.tipo || "receita", ativa: true } as any);
+      if (result) sf("categoria_id", result.id);
+    } else if (qc.type === "centro_custo") {
+      result = await insertCentroCusto({ nome: qc.nome, ativo: true } as any);
+      if (result) sf("centro_custo_id", result.id);
+    }
+    setQc(null);
   };
 
   const openNew = () => {
@@ -305,45 +328,60 @@ export default function ContasReceber() {
               <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Partes e Classificação</p>
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <Select value={campo(form,"cliente_id")} onValueChange={(v) => sf("cliente_id", v)}>
-                  <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">— Nenhum —</SelectItem>
-                    {clientes.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select value={toSv(campo(form,"cliente_id"))} onValueChange={(v) => fromSv(v, "cliente_id", sf)}>
+                    <SelectTrigger className="bg-secondary border-border flex-1"><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Nenhum —</SelectItem>
+                      {clientes.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="outline" size="icon" className="shrink-0" title="Cadastrar novo cliente" onClick={() => setQc({ type: "cliente", nome: "" })}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Categoria</Label>
-                  <Select value={campo(form,"categoria_id")} onValueChange={(v) => sf("categoria_id", v)}>
-                    <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">— Nenhuma —</SelectItem>
-                      {categorias.filter((c) => ["receita","ambos"].includes(c.tipo)).map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={toSv(campo(form,"categoria_id"))} onValueChange={(v) => fromSv(v, "categoria_id", sf)}>
+                      <SelectTrigger className="bg-secondary border-border flex-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— Nenhuma —</SelectItem>
+                        {categorias.filter((c) => ["receita","ambos"].includes(c.tipo)).map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button type="button" variant="outline" size="icon" className="shrink-0" title="Cadastrar nova categoria" onClick={() => setQc({ type: "categoria", nome: "", tipo: "receita" })}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Centro de Custo</Label>
-                  <Select value={campo(form,"centro_custo_id")} onValueChange={(v) => sf("centro_custo_id", v)}>
-                    <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">— Nenhum —</SelectItem>
-                      {centrosCusto.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={toSv(campo(form,"centro_custo_id"))} onValueChange={(v) => fromSv(v, "centro_custo_id", sf)}>
+                      <SelectTrigger className="bg-secondary border-border flex-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— Nenhum —</SelectItem>
+                        {centrosCusto.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Button type="button" variant="outline" size="icon" className="shrink-0" title="Cadastrar novo centro de custo" onClick={() => setQc({ type: "centro_custo", nome: "" })}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Conta Bancária</Label>
-                  <Select value={campo(form,"conta_caixa_id")} onValueChange={(v) => sf("conta_caixa_id", v)}>
+                  <Select value={toSv(campo(form,"conta_caixa_id"))} onValueChange={(v) => fromSv(v, "conta_caixa_id", sf)}>
                     <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— Nenhuma —</SelectItem>
+                      <SelectItem value="__none__">— Nenhuma —</SelectItem>
                       {contasBancarias.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.nome}{c.banco ? ` (${c.banco})` : ""}
@@ -354,10 +392,10 @@ export default function ContasReceber() {
                 </div>
                 <div className="space-y-2">
                   <Label>Forma de Recebimento</Label>
-                  <Select value={campo(form,"forma_pagamento")} onValueChange={(v) => sf("forma_pagamento", v)}>
+                  <Select value={toSv(campo(form,"forma_pagamento"))} onValueChange={(v) => fromSv(v, "forma_pagamento", sf)}>
                     <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— Não informado —</SelectItem>
+                      <SelectItem value="__none__">— Não informado —</SelectItem>
                       {FORMA_PGTO.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -465,6 +503,46 @@ export default function ContasReceber() {
               disabled={!campo(form,"descricao") || !campo(form,"valor") || !campo(form,"vencimento")}>
               Enviar p/ Aprovação
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Create Dialog */}
+      <Dialog open={!!qc} onOpenChange={(o) => { if (!o) setQc(null); }}>
+        <DialogContent className="bg-card border-border max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {qc?.type === "cliente" ? "Novo Cliente" : qc?.type === "categoria" ? "Nova Categoria" : "Novo Centro de Custo"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nome *</Label>
+              <Input
+                value={qc?.nome || ""}
+                onChange={(e) => setQc((p) => p ? { ...p, nome: e.target.value } : null)}
+                className="bg-secondary border-border"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") handleQuickCreate(); }}
+              />
+            </div>
+            {qc?.type === "categoria" && (
+              <div className="space-y-2">
+                <Label>Tipo</Label>
+                <Select value={qc.tipo || "receita"} onValueChange={(v) => setQc((p) => p ? { ...p, tipo: v } : null)}>
+                  <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="receita">Receita</SelectItem>
+                    <SelectItem value="despesa">Despesa</SelectItem>
+                    <SelectItem value="ambos">Ambos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => setQc(null)}>Cancelar</Button>
+            <Button onClick={handleQuickCreate} disabled={!qc?.nome.trim()}>Criar</Button>
           </div>
         </DialogContent>
       </Dialog>
