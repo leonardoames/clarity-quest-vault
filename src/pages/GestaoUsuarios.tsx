@@ -39,12 +39,14 @@ const roleBadgeClass: Record<string, string> = {
 
 export default function GestaoUsuarios() {
   const { session } = useAuth();
-  const { empresas } = useEmpresa();
+  const { empresas, empresaAtual } = useEmpresa();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
+  // userId → percentual societário na empresa atual
+  const [socioMap, setSocioMap] = useState<Map<string, number | null>>(new Map());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -65,9 +67,26 @@ export default function GestaoUsuarios() {
     setLoading(false);
   };
 
+  // Fetch socios vinculados a usuários na empresa atual
+  const fetchSocioMap = async () => {
+    if (!empresaAtual?.id) return;
+    const { data } = await (supabase.from("socios") as any)
+      .select("user_id, percentual_societario")
+      .eq("empresa_id", empresaAtual.id)
+      .not("user_id", "is", null);
+    const map = new Map<string, number | null>(
+      (data || []).map((s: any) => [s.user_id, s.percentual_societario])
+    );
+    setSocioMap(map);
+  };
+
   useEffect(() => {
     if (session) fetchUsers();
   }, [session]);
+
+  useEffect(() => {
+    fetchSocioMap();
+  }, [empresaAtual?.id]);
 
   const handleCreate = async () => {
     if (!newEmail || !newPassword) return;
@@ -226,6 +245,7 @@ export default function GestaoUsuarios() {
                   <TableHead>Email</TableHead>
                   <TableHead>Perfil</TableHead>
                   <TableHead>Empresas</TableHead>
+                  <TableHead>Societário</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -294,6 +314,15 @@ export default function GestaoUsuarios() {
                           </DialogContent>
                         </Dialog>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {socioMap.has(u.id) ? (
+                        <Badge className="text-xs bg-primary/20 text-primary border-primary/30">
+                          Sócio {socioMap.get(u.id) != null ? `${socioMap.get(u.id)}%` : ""}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {u.must_reset_password ? (
