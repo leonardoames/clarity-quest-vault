@@ -352,21 +352,41 @@ export default function Importacao() {
         const v = r.values;
         const vencimento = parseDate(v.vencimento) || "";
         const competencia = v.competencia || deriveCompetencia(vencimento);
+        const status = v.status ? parseStatus(v.status, importType) : "pendente";
+
+        // data_movimento: usa o campo mapeado; se não informado mas status é pago/recebido,
+        // usa o vencimento para que o registro apareça no Fluxo de Caixa
+        const isPago = status === "pago" || status === "recebido";
+        const dataMovimento = parseDate(v.data_movimento) || (isPago ? vencimento : null);
+
         const base: any = {
           empresa_id: empresaAtual.id,
           descricao: v.descricao,
           valor: parseNumber(v.valor) || 0,
           vencimento,
           competencia: competencia || null,
+          forma_pagamento: v.forma_pagamento || null,
+          nota_fiscal: v.nota_fiscal || null,
+          data_movimento: dataMovimento,
+          data_prevista: parseDate(v.data_prevista) || null,
+          valor_original: v.valor_original ? parseNumber(v.valor_original) : null,
+          juros: parseNumber(v.juros) || 0,
+          multa: parseNumber(v.multa) || 0,
+          desconto: parseNumber(v.desconto) || 0,
+          taxas: parseNumber(v.taxas) || 0,
           categoria_id: v.categoria ? findId(categorias, v.categoria) : null,
           observacoes: v.observacoes || null,
-          status: v.status ? parseStatus(v.status, importType) : "pendente",
+          status,
+          origem_lancamento: "importacao",
           ...(importacaoId ? { importacao_id: importacaoId } : {}),
         };
+
         if (importType === "contas_pagar") {
           base.fornecedor_id = v.fornecedor ? findId(fornecedores, v.fornecedor) : null;
+          if (status === "pago") base.data_pagamento = dataMovimento;
         } else {
           base.cliente_id = v.cliente ? findId(clientes, v.cliente) : null;
+          if (status === "recebido") base.data_recebimento = dataMovimento;
         }
         return base;
       });

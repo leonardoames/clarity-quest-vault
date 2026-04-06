@@ -59,42 +59,49 @@ export default function FluxoCaixa() {
     if (!empresaAtual?.id) return;
     setLoading(true);
 
-    const inicioMes = `${mes}-01`;
-    const [y, m] = mes.split("-").map(Number);
-    const fimMes = new Date(y, m, 0).toISOString().split("T")[0];
+    try {
+      const inicioMes = `${mes}-01`;
+      const [y, m] = mes.split("-").map(Number);
+      const fimMes = new Date(y, m, 0).toISOString().split("T")[0];
 
-    const contaFilter = contaFiltro !== "todas" ? contaFiltro : null;
+      const contaFilter = contaFiltro !== "todas" ? contaFiltro : null;
 
-    // Fetch saídas (contas_pagar pagas no mês)
-    let qPagar = (supabase as any)
-      .from("contas_pagar")
-      .select("id, descricao, valor, data_movimento, data_pagamento, forma_pagamento, fornecedores(nome), categorias_financeiras(nome), contas_caixa(nome), conta_caixa_id")
-      .eq("empresa_id", empresaAtual.id)
-      .eq("status", "pago")
-      .or(`data_movimento.gte.${inicioMes},data_pagamento.gte.${inicioMes}`)
-      .or(`data_movimento.lte.${fimMes},data_pagamento.lte.${fimMes}`);
+      // Filtro de período: registro cai no mês se data_movimento OU data_pagamento estiver no intervalo.
+      // Usa sintaxe PostgREST aninhada em um único .or() para evitar conflito de parâmetros.
+      const filtroPagar =
+        `and(data_movimento.gte.${inicioMes},data_movimento.lte.${fimMes}),` +
+        `and(data_pagamento.gte.${inicioMes},data_pagamento.lte.${fimMes})`;
 
-    if (contaFilter) qPagar = qPagar.eq("conta_caixa_id", contaFilter);
+      const filtroReceber =
+        `and(data_movimento.gte.${inicioMes},data_movimento.lte.${fimMes}),` +
+        `and(data_recebimento.gte.${inicioMes},data_recebimento.lte.${fimMes})`;
 
-    // Fetch entradas (contas_receber recebidas no mês)
-    let qReceber = (supabase as any)
-      .from("contas_receber")
-      .select("id, descricao, valor, data_movimento, data_recebimento, forma_pagamento, clientes(nome), categorias_financeiras(nome), contas_caixa(nome), conta_caixa_id")
-      .eq("empresa_id", empresaAtual.id)
-      .eq("status", "recebido")
-      .or(`data_movimento.gte.${inicioMes},data_recebimento.gte.${inicioMes}`)
-      .or(`data_movimento.lte.${fimMes},data_recebimento.lte.${fimMes}`);
+      let qPagar = (supabase as any)
+        .from("contas_pagar")
+        .select("id, descricao, valor, data_movimento, data_pagamento, forma_pagamento, fornecedores(nome), categorias_financeiras(nome), contas_caixa(nome), conta_caixa_id")
+        .eq("empresa_id", empresaAtual.id)
+        .eq("status", "pago")
+        .or(filtroPagar);
 
-    if (contaFilter) qReceber = qReceber.eq("conta_caixa_id", contaFilter);
+      if (contaFilter) qPagar = qPagar.eq("conta_caixa_id", contaFilter);
 
-    const [{ data: pagar }, { data: receber }] = await Promise.all([qPagar, qReceber]);
+      let qReceber = (supabase as any)
+        .from("contas_receber")
+        .select("id, descricao, valor, data_movimento, data_recebimento, forma_pagamento, clientes(nome), categorias_financeiras(nome), contas_caixa(nome), conta_caixa_id")
+        .eq("empresa_id", empresaAtual.id)
+        .eq("status", "recebido")
+        .or(filtroReceber);
 
-    const saidas: FluxoItem[] = (pagar || [])
-      .filter((r: any) => {
-        const dt = r.data_movimento || r.data_pagamento;
-        return dt >= inicioMes && dt <= fimMes;
-      })
-      .map((r: any) => ({
+      if (contaFilter) qReceber = qReceber.eq("conta_caixa_id", contaFilter);
+
+      const [{ data: pagar, error: errPagar }, { data: receber, error: errReceber }] =
+        await Promise.all([qPagar, qReceber]);
+
+      if (errPagar || errReceber) {
+        console.error("FluxoCaixa query error:", errPagar || errReceber);
+      }
+
+      const saidas: FluxoItem[] = (pagar || []).map((r: any) => ({
         id: r.id,
         tipo: "saida" as const,
         descricao: r.descricao,
@@ -106,12 +113,7 @@ export default function FluxoCaixa() {
         valor: Number(r.valor),
       }));
 
-    const entradas: FluxoItem[] = (receber || [])
-      .filter((r: any) => {
-        const dt = r.data_movimento || r.data_recebimento;
-        return dt >= inicioMes && dt <= fimMes;
-      })
-      .map((r: any) => ({
+      const entradas: FluxoItem[] = (receber || []).map((r: any) => ({
         id: r.id,
         tipo: "entrada" as const,
         descricao: r.descricao,
@@ -123,9 +125,13 @@ export default function FluxoCaixa() {
         valor: Number(r.valor),
       }));
 
-    const merged = [...saidas, ...entradas].sort((a, b) => a.data.localeCompare(b.data));
-    setItems(merged);
-    setLoading(false);
+      const merged = [...saidas, ...entradas].sort((a, b) => a.data.localeCompare(b.data));
+      setItems(merged);
+    } catch (err) {
+      console.error("FluxoCaixa loadFluxo error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const totalEntradas = items.filter((i) => i.tipo === "entrada").reduce((s, i) => s + i.valor, 0);
