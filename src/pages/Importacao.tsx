@@ -266,7 +266,7 @@ export default function Importacao() {
   const { user } = useAuth();
 
   const [step, setStep] = useState<Step>(1);
-  const [importType, setImportType] = useState<ImportType>("contas_pagar");
+  const [importType, setImportType] = useState<ImportType>("extrato");
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
@@ -379,21 +379,25 @@ export default function Importacao() {
     let dbError: string | undefined;
 
     if (importType === "contas_pagar" || importType === "contas_receber") {
-      const table = importType;
+      // Roteamento automático pelo sinal: negativo → contas_pagar, positivo → contas_receber
+      const pagRecords: any[] = [];
+      const recRecords: any[] = [];
 
-      const buildRec = (r: ValidatedRow) => {
+      for (const r of validRows) {
         const v = r.values;
+        const rawValor = parseNumber(v.valor) ?? 0;
+        const isNegativo = rawValor < 0;
+        const destTipo = isNegativo ? "contas_pagar" : "contas_receber";
         const vencimento = parseDate(v.vencimento) || "";
         const competencia = v.competencia || deriveCompetencia(vencimento);
-        const status = v.status ? parseStatus(v.status, importType) : "pendente";
+        const status = v.status ? parseStatus(v.status, destTipo) : "pendente";
         const isPago = status === "pago" || status === "recebido";
         const dataMovimento = parseDate(v.data_movimento) || (isPago ? vencimento : null);
 
-        // Campos obrigatórios (sempre presentes no schema original)
         const rec: any = {
           empresa_id: empresaAtual!.id,
           descricao: v.descricao,
-          valor: parseNumber(v.valor) || 0,
+          valor: Math.abs(rawValor),
           vencimento,
           competencia: competencia || null,
           categoria_id: v.categoria ? findId(categorias, v.categoria) : null,
@@ -402,8 +406,6 @@ export default function Importacao() {
           ...(importacaoId ? { importacao_id: importacaoId } : {}),
         };
 
-        // Campos do schema expandido — enviados apenas quando têm valor,
-        // para não quebrar se a migration ainda não foi aplicada
         if (v.forma_pagamento) rec.forma_pagamento = v.forma_pagamento;
         if (v.nota_fiscal) rec.nota_fiscal = v.nota_fiscal;
         if (dataMovimento) rec.data_movimento = dataMovimento;
@@ -419,19 +421,24 @@ export default function Importacao() {
         const taxas = parseNumber(v.taxas);
         if (taxas) rec.taxas = taxas;
 
-        if (importType === "contas_pagar") {
+        if (isNegativo) {
           rec.fornecedor_id = v.fornecedor ? findId(fornecedores, v.fornecedor) : null;
           if (status === "pago" && dataMovimento) rec.data_pagamento = dataMovimento;
+          pagRecords.push(rec);
         } else {
           rec.cliente_id = v.cliente ? findId(clientes, v.cliente) : null;
           if (status === "recebido" && dataMovimento) rec.data_recebimento = dataMovimento;
+          recRecords.push(rec);
         }
-        return rec;
-      };
+      }
 
-      for (let i = 0; i < validRows.length; i += 50) {
-        const batch = validRows.slice(i, i + 50).map(buildRec);
-        const { count, error: batchErr } = await insertWithRetry(table, batch);
+      for (let i = 0; i < pagRecords.length; i += 50) {
+        const { count, error: batchErr } = await insertWithRetry("contas_pagar", pagRecords.slice(i, i + 50));
+        successCount += count;
+        if (batchErr && !dbError) dbError = batchErr;
+      }
+      for (let i = 0; i < recRecords.length; i += 50) {
+        const { count, error: batchErr } = await insertWithRetry("contas_receber", recRecords.slice(i, i + 50));
         successCount += count;
         if (batchErr && !dbError) dbError = batchErr;
       }

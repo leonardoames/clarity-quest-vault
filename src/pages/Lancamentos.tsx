@@ -75,7 +75,17 @@ export default function Lancamentos() {
   const [showRecorrencia, setShowRecorrencia] = useState(false);
   const [qc, setQc] = useState<QuickCreate | null>(null);
 
-  const sf = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const sf = (k: string, v: string) => {
+    setForm((p) => ({ ...p, [k]: v }));
+    // Auto-detecta tipo pelo sinal do valor
+    if (k === "valor" && v !== "") {
+      const num = parseFloat(v);
+      if (!isNaN(num)) {
+        if (num < 0) setDialogTipo("pagar");
+        else if (num > 0) setDialogTipo("receber");
+      }
+    }
+  };
 
   const navMes = (delta: number) => {
     const [y, m] = mes.split("-").map(Number);
@@ -204,7 +214,7 @@ export default function Lancamentos() {
   const buildRecord = (status: string) => {
     const base = {
       descricao: campo(form, "descricao"),
-      valor: Number(campo(form, "valor")),
+      valor: Math.abs(Number(campo(form, "valor"))),
       vencimento: campo(form, "vencimento"),
       competencia: campo(form, "competencia") || campo(form, "vencimento").substring(0, 7),
       categoria_id: campo(form, "categoria_id") || null,
