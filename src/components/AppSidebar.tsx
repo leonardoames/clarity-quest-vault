@@ -39,7 +39,11 @@ const gestaoItems = [
   { title: "Fechamento Mensal", url: "/fechamento", icon: Lock },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  corEmpresa?: string;
+}
+
+export function AppSidebar({ corEmpresa = "#f97316" }: AppSidebarProps) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
@@ -50,8 +54,8 @@ export function AppSidebar() {
           <NavLink
             to={item.url}
             end={item.url === "/"}
-            className="group flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150"
-            activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium [&>svg]:text-primary"
+            className="group relative flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150"
+            activeClassName="bg-sidebar-accent/80 text-sidebar-accent-foreground font-medium [&>svg]:text-primary nav-active-item"
           >
             <item.icon className="h-4 w-4 shrink-0 transition-colors" />
             {!collapsed && <span>{item.title}</span>}
@@ -61,24 +65,33 @@ export function AppSidebar() {
     ));
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border px-4 py-5">
+    <Sidebar collapsible="icon" style={{ '--active-color': corEmpresa } as React.CSSProperties}>
+      <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="relative flex items-center justify-center h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+          <div
+            className="relative flex items-center justify-center h-8 w-8 rounded-lg shrink-0"
+            style={{
+              background: `${corEmpresa}18`,
+              border: `1px solid ${corEmpresa}35`,
+            }}
+          >
             <span
-              className="text-primary font-black text-xs tracking-tighter leading-none"
-              style={{ fontFamily: 'Space Mono, monospace' }}
+              className="font-black text-xs tracking-tighter leading-none"
+              style={{ fontFamily: 'Space Mono, monospace', color: corEmpresa }}
             >
               W3
             </span>
-            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary animate-orange-pulse" />
+            <span
+              className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full"
+              style={{ background: corEmpresa, boxShadow: `0 0 6px 0 ${corEmpresa}` }}
+            />
           </div>
           {!collapsed && (
             <div className="min-w-0">
               <p className="text-sm font-bold text-sidebar-accent-foreground tracking-tight leading-none">
                 W3 Finanças
               </p>
-              <p className="text-[10px] text-sidebar-foreground/50 mt-0.5 uppercase tracking-widest">
+              <p className="text-[10px] text-sidebar-foreground/40 mt-0.5 uppercase tracking-widest">
                 Gestão Financeira
               </p>
             </div>

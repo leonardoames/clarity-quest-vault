@@ -2,58 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
 
 @layer base {
   :root {
-    /* ─── Preto / Laranja / Branco ─── */
-    --background: 0 0% 5%;
-    --foreground: 30 8% 94%;
+    /* ─── Palette: Deep Black / Warm Orange / Off-White ─── */
+    --background: 0 0% 4%;
+    --foreground: 30 6% 93%;
 
-    --card: 0 0% 8%;
-    --card-foreground: 30 8% 94%;
+    --card: 0 0% 7%;
+    --card-foreground: 30 6% 93%;
 
-    --popover: 0 0% 9%;
-    --popover-foreground: 30 8% 94%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 30 6% 93%;
 
     --primary: 22 93% 52%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 30 6% 80%;
+    --secondary: 0 0% 11%;
+    --secondary-foreground: 30 5% 78%;
 
-    --muted: 0 0% 11%;
-    --muted-foreground: 0 0% 44%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 42%;
 
     --accent: 22 93% 52%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 98%;
 
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 8%;
 
-    --success: 142 69% 40%;
+    --success: 142 60% 38%;
     --success-foreground: 0 0% 98%;
 
-    --border: 0 0% 14%;
-    --input: 0 0% 13%;
+    --border: 0 0% 13%;
+    --input: 0 0% 12%;
     --ring: 22 93% 52%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 6%;
-    --sidebar-foreground: 0 0% 55%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 50%;
     --sidebar-primary: 22 93% 52%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 11%;
-    --sidebar-accent-foreground: 30 8% 88%;
-    --sidebar-border: 0 0% 12%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 30 6% 86%;
+    --sidebar-border: 0 0% 11%;
     --sidebar-ring: 22 93% 52%;
 
-    --chart-receita: 142 69% 40%;
-    --chart-despesa: 0 72% 51%;
+    --chart-receita: 142 60% 38%;
+    --chart-despesa: 0 70% 50%;
     --chart-aporte: 22 93% 52%;
     --chart-lucro: 38 92% 50%;
   }
@@ -67,7 +67,8 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Sora', system-ui, sans-serif;
-    font-feature-settings: "kern" 1, "liga" 1;
+    font-feature-settings: "kern" 1, "liga" 1, "tnum" 1;
+    -webkit-font-smoothing: antialiased;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -75,130 +76,209 @@
     font-family: 'Sora', system-ui, sans-serif;
   }
 
-  /* Números e valores financeiros com fonte mono */
-  .mono, .financial-value, [data-mono] {
+  /* Valores financeiros — Space Mono com kerning negativo */
+  .font-mono, [class*="font-mono"] {
     font-family: 'Space Mono', monospace;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
   }
 
-  /* Scrollbar customizada */
-  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  /* Scrollbar minimalista */
+  ::-webkit-scrollbar { width: 3px; height: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: hsl(0 0% 20%); border-radius: 2px; }
-  ::-webkit-scrollbar-thumb:hover { background: hsl(22 93% 52% / 0.6); }
+  ::-webkit-scrollbar-thumb { background: hsl(0 0% 18%); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(22 93% 52% / 0.5); }
 
   ::selection {
-    background: hsl(22 93% 52% / 0.25);
-    color: hsl(30 8% 94%);
+    background: hsl(22 93% 52% / 0.22);
+    color: hsl(30 6% 93%);
   }
 }
 
 @layer components {
-  /* ─── Stat Cards ─── */
+
+  /* ═══════════════════════════════════════════
+     STAT CARDS — profundidade com gradiente sutil
+  ═══════════════════════════════════════════ */
   .stat-card {
-    @apply relative bg-card border border-border rounded-lg p-5 overflow-hidden transition-all duration-300;
+    @apply relative bg-card border border-border rounded-xl p-5 overflow-hidden;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+    background: linear-gradient(145deg, hsl(0 0% 8%) 0%, hsl(0 0% 6.5%) 100%);
   }
 
+  /* Linha de brilho no topo */
   .stat-card::before {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0;
+    top: 0; left: 16px; right: 16px;
     height: 1px;
-    background: linear-gradient(90deg, transparent, hsl(22 93% 52% / 0), transparent);
+    background: linear-gradient(90deg, transparent, hsl(0 0% 30% / 0.5), transparent);
+    transition: background 0.3s ease;
+  }
+
+  /* Ambient glow lateral esquerda */
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 2px;
+    background: transparent;
+    border-radius: 4px 0 0 4px;
     transition: background 0.3s ease;
   }
 
   .stat-card:hover {
-    @apply border-primary/30;
-    transform: translateY(-1px);
+    border-color: hsl(0 0% 20%);
+    transform: translateY(-2px);
     box-shadow:
-      0 0 0 1px hsl(22 93% 52% / 0.08),
-      0 8px 24px -8px hsl(0 0% 0% / 0.6),
-      0 0 40px -10px hsl(22 93% 52% / 0.12);
+      0 0 0 1px hsl(22 93% 52% / 0.06),
+      0 12px 32px -8px hsl(0 0% 0% / 0.7),
+      0 2px 8px -2px hsl(0 0% 0% / 0.4);
   }
 
   .stat-card:hover::before {
-    background: linear-gradient(90deg, transparent, hsl(22 93% 52% / 0.4), transparent);
+    background: linear-gradient(90deg, transparent, hsl(22 93% 52% / 0.35), transparent);
   }
 
-  /* ─── Tabela de dados ─── */
+  .stat-card:hover::after {
+    background: hsl(22 93% 52% / 0.4);
+  }
+
+  /* ═══════════════════════════════════════════
+     DATA TABLE — clean, legível e denso
+  ═══════════════════════════════════════════ */
   .data-table {
     @apply w-full text-sm;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .data-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
 
   .data-table th {
-    @apply text-left font-medium px-4 py-3 border-b border-border;
-    @apply text-muted-foreground uppercase tracking-wider;
-    font-size: 0.7rem;
-    letter-spacing: 0.08em;
+    @apply text-left font-medium px-4 py-2.5;
+    @apply text-muted-foreground uppercase;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    background: hsl(0 0% 6%);
+    border-bottom: 1px solid hsl(0 0% 14%);
   }
 
   .data-table td {
-    @apply px-4 py-3 border-b border-border/60;
+    @apply px-4 py-2.5;
+    border-bottom: 1px solid hsl(0 0% 10%);
   }
 
   .data-table tr:last-child td {
-    @apply border-b-0;
+    border-bottom: none;
   }
 
-  .data-table tr:hover td {
-    @apply bg-secondary/60;
+  .data-table tbody tr {
+    transition: background 0.12s ease;
   }
 
-  /* ─── Status badges ─── */
+  .data-table tbody tr:hover td {
+    background: hsl(0 0% 10.5%);
+  }
+
+  /* Linha zebra muito sutil */
+  .data-table tbody tr:nth-child(even) td {
+    background: hsl(0 0% 7.5%);
+  }
+
+  .data-table tbody tr:nth-child(even):hover td {
+    background: hsl(0 0% 11%);
+  }
+
+  /* ═══════════════════════════════════════════
+     STATUS BADGES
+  ═══════════════════════════════════════════ */
   .status-badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider;
   }
 
-  /* ─── Layout helpers ─── */
+  /* ═══════════════════════════════════════════
+     NAV — item ativo com borda esquerda colorida
+  ═══════════════════════════════════════════ */
+  .nav-active-item {
+    position: relative;
+  }
+
+  .nav-active-item::before {
+    content: '';
+    position: absolute;
+    left: -10px;
+    top: 4px;
+    bottom: 4px;
+    width: 2.5px;
+    border-radius: 0 2px 2px 0;
+    background: var(--active-color, hsl(22 93% 52%));
+    box-shadow: 0 0 8px 0 var(--active-color, hsl(22 93% 52%));
+  }
+
+  /* ═══════════════════════════════════════════
+     LAYOUT HELPERS
+  ═══════════════════════════════════════════ */
   .page-header {
-    @apply flex items-center justify-between mb-6;
+    @apply flex items-center justify-between;
+    padding-bottom: 1.5rem;
   }
 
   .page-title {
-    @apply text-xl font-bold tracking-tight;
+    @apply font-bold tracking-tight;
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-muted-foreground mt-1;
+    font-size: 0.8rem;
   }
 
   .section-title {
-    @apply text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-4;
-    letter-spacing: 0.1em;
+    @apply text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-4;
+    letter-spacing: 0.12em;
   }
 
-  /* ─── Orange glow effects ─── */
-  .glow-orange {
-    box-shadow: 0 0 30px -5px hsl(22 93% 52% / 0.25);
-  }
-
-  .glow-primary {
-    box-shadow: 0 0 30px -5px hsl(22 93% 52% / 0.2);
-  }
-
-  /* ─── Orange accent line (top border) ─── */
-  .accent-top {
-    position: relative;
-  }
-  .accent-top::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, hsl(22 93% 52%), hsl(38 92% 50%), transparent);
-    border-radius: 1px;
-  }
-
-  /* ─── Section card ─── */
+  /* ═══════════════════════════════════════════
+     SECTION CARD
+  ═══════════════════════════════════════════ */
   .section-card {
-    @apply bg-card border border-border rounded-lg overflow-hidden;
+    @apply bg-card border border-border rounded-xl overflow-hidden;
   }
 
   .section-card-header {
     @apply flex items-center justify-between px-5 py-4 border-b border-border;
   }
+
+  /* ═══════════════════════════════════════════
+     GLOW EFFECTS
+  ═══════════════════════════════════════════ */
+  .glow-orange {
+    box-shadow: 0 0 24px -4px hsl(22 93% 52% / 0.22);
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 24px -4px hsl(22 93% 52% / 0.18);
+  }
+
+  .glow-success {
+    box-shadow: 0 0 20px -4px hsl(142 60% 38% / 0.25);
+  }
+
+  .glow-destructive {
+    box-shadow: 0 0 20px -4px hsl(0 70% 50% / 0.2);
+  }
 }
 
-/* ─── Animações ─── */
+/* ═══════════════════════════════════════════
+   ANIMAÇÕES
+═══════════════════════════════════════════ */
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -208,21 +288,26 @@
 }
 
 @keyframes slide-in-left {
-  from { opacity: 0; transform: translateX(-8px); }
+  from { opacity: 0; transform: translateX(-6px); }
   to   { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes orange-pulse {
   0%, 100% { box-shadow: 0 0 0 0 hsl(22 93% 52% / 0); }
-  50%       { box-shadow: 0 0 0 4px hsl(22 93% 52% / 0.15); }
+  50%       { box-shadow: 0 0 0 4px hsl(22 93% 52% / 0.18); }
 }
 
-.animate-fade-up    { animation: fade-up 0.4s ease-out both; }
-.animate-fade-in    { animation: fade-in 0.3s ease-out both; }
-.animate-slide-left { animation: slide-in-left 0.3s ease-out both; }
-.animate-orange-pulse { animation: orange-pulse 2s ease-in-out infinite; }
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
 
-/* Stagger para cards */
+.animate-fade-up    { animation: fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fade-in    { animation: fade-in 0.25s ease-out both; }
+.animate-slide-left { animation: slide-in-left 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-orange-pulse { animation: orange-pulse 2.5s ease-in-out infinite; }
+
+/* Stagger */
 .stagger-1 { animation-delay: 0.05s; }
 .stagger-2 { animation-delay: 0.10s; }
 .stagger-3 { animation-delay: 0.15s; }

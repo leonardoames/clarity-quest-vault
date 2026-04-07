@@ -75,6 +75,32 @@ export default function Lancamentos() {
   const [showRecorrencia, setShowRecorrencia] = useState(false);
   const [qc, setQc] = useState<QuickCreate | null>(null);
 
+  // Seleção em lote
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  type BulkField = { enabled: boolean; value: string };
+  const [bulkStatus,      setBulkStatus]      = useState<BulkField>({ enabled: false, value: "pendente" });
+  const [bulkCompetencia, setBulkCompetencia] = useState<BulkField>({ enabled: false, value: mesAno(new Date()) });
+  const [bulkCategoriaId, setBulkCategoriaId] = useState<BulkField>({ enabled: false, value: "" });
+  const [bulkContaId,     setBulkContaId]     = useState<BulkField>({ enabled: false, value: "" });
+  const [bulkForma,       setBulkForma]       = useState<BulkField>({ enabled: false, value: "" });
+
+  const rowKey = (row: any) => `${row._tipo}|${row.id}`;
+  const isSelected = (row: any) => selectedIds.has(rowKey(row));
+  const toggleSelect = (row: any) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(rowKey(row))) next.delete(rowKey(row)); else next.add(rowKey(row));
+    return next;
+  });
+  const toggleSelectAll = () => {
+    if (selectedIds.size === lancamentosComSaldo.length && lancamentosComSaldo.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(lancamentosComSaldo.map((c: any) => rowKey(c))));
+    }
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+
   const sf = (k: string, v: string) => {
     setForm((p) => ({ ...p, [k]: v }));
     // Auto-detecta tipo pelo sinal do valor
@@ -310,6 +336,44 @@ export default function Lancamentos() {
     setQc(null);
   };
 
+  const handleBulkMarkDone = async () => {
+    const today = new Date().toISOString().split("T")[0];
+    await Promise.all(Array.from(selectedIds).map(key => {
+      const [tipo, id] = key.split("|");
+      if (tipo === "pagar") return updatePagar(id, { status: "pago", data_pagamento: today, data_movimento: today } as any);
+      return updateReceber(id, { status: "recebido", data_recebimento: today, data_movimento: today } as any);
+    }));
+    clearSelection();
+  };
+
+  const handleBulkUpdate = async () => {
+    const today = new Date().toISOString().split("T")[0];
+    const anyEnabled = bulkStatus.enabled || bulkCompetencia.enabled || bulkCategoriaId.enabled || bulkContaId.enabled || bulkForma.enabled;
+    if (!anyEnabled) return;
+
+    await Promise.all(Array.from(selectedIds).map(key => {
+      const [tipo, id] = key.split("|");
+      const patch: any = {};
+      if (bulkStatus.enabled) {
+        let s = bulkStatus.value;
+        if (tipo === "pagar" && s === "recebido") s = "pago";
+        if (tipo === "receber" && s === "pago") s = "recebido";
+        patch.status = s;
+        if (s === "pago")     { patch.data_pagamento  = today; patch.data_movimento = today; }
+        if (s === "recebido") { patch.data_recebimento = today; patch.data_movimento = today; }
+      }
+      if (bulkCompetencia.enabled && bulkCompetencia.value) patch.competencia    = bulkCompetencia.value;
+      if (bulkCategoriaId.enabled && bulkCategoriaId.value) patch.categoria_id  = bulkCategoriaId.value;
+      if (bulkContaId.enabled     && bulkContaId.value)     patch.conta_caixa_id = bulkContaId.value;
+      if (bulkForma.enabled       && bulkForma.value)       patch.forma_pagamento = bulkForma.value;
+      if (tipo === "pagar") return updatePagar(id, patch);
+      return updateReceber(id, patch);
+    }));
+
+    setBulkDialogOpen(false);
+    clearSelection();
+  };
+
   const handleSeedCategorias = async () => {
     if (!empresaAtual?.id) return;
     await (supabase.rpc as any)("criar_categorias_padrao", { p_empresa_id: empresaAtual.id });
@@ -318,7 +382,7 @@ export default function Lancamentos() {
 
   const isPagar = dialogTipo === "pagar";
   const formInvalid = !campo(form, "descricao") || !campo(form, "valor") || !campo(form, "vencimento");
-  const colSpan = modoExtrato ? 11 : 10;
+  const colSpan = modoExtrato ? 13 : 12;
 
   return (
     <div className="space-y-6">
@@ -456,6 +520,24 @@ export default function Lancamentos() {
         )}
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-lg px-4 py-2.5">
+          <span className="text-sm font-medium">{selectedIds.size} selecionado(s)</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={clearSelection} className="text-xs">
+              Limpar seleção
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs text-success border-success/30 hover:bg-success/10" onClick={handleBulkMarkDone}>
+              Marcar Pago / Recebido
+            </Button>
+            <Button size="sm" className="text-xs" onClick={() => setBulkDialogOpen(true)}>
+              <Pencil className="h-3 w-3 mr-1.5" />Editar em lote
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">
         <div className="stat-card">
@@ -489,6 +571,15 @@ export default function Lancamentos() {
           <table className="data-table">
             <thead>
               <tr>
+                <th className="w-8">
+                  <input
+                    type="checkbox"
+                    className="accent-primary"
+                    checked={lancamentosComSaldo.length > 0 && selectedIds.size === lancamentosComSaldo.length}
+                    ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < lancamentosComSaldo.length; }}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th>Tipo</th>
                 <th>Vencimento</th>
                 <th>Descrição</th>
@@ -508,7 +599,15 @@ export default function Lancamentos() {
               ) : lancamentosComSaldo.length === 0 ? (
                 <tr><td colSpan={colSpan} className="text-center text-muted-foreground py-8">Nenhum lançamento encontrado</td></tr>
               ) : lancamentosComSaldo.map((c: any) => (
-                <tr key={`${c._tipo}-${c.id}`}>
+                <tr key={`${c._tipo}-${c.id}`} className={isSelected(c) ? "bg-primary/5" : ""}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      className="accent-primary"
+                      checked={isSelected(c)}
+                      onChange={() => toggleSelect(c)}
+                    />
+                  </td>
                   <td>
                     {c._tipo === "pagar" ? (
                       <span className="flex items-center gap-1 text-xs text-destructive font-medium whitespace-nowrap">
@@ -820,6 +919,85 @@ export default function Lancamentos() {
             )}
             <Button onClick={() => handleSave(editingRow ? editingRow.status : "pendente")} disabled={formInvalid}>
               {editingRow ? "Salvar alterações" : "Enviar p/ Aprovação"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Edit Dialog */}
+      <Dialog open={bulkDialogOpen} onOpenChange={(o) => { if (!o) setBulkDialogOpen(false); }}>
+        <DialogContent className="bg-card border-border max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar em lote — {selectedIds.size} registro(s)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-xs text-muted-foreground">Ative apenas os campos que deseja alterar. Os demais permanecem inalterados.</p>
+
+            {/* Status */}
+            <div className="flex items-center gap-3">
+              <input type="checkbox" className="accent-primary" checked={bulkStatus.enabled} onChange={(e) => setBulkStatus(p => ({ ...p, enabled: e.target.checked }))} />
+              <Label className="w-28 shrink-0">Situação</Label>
+              <Select disabled={!bulkStatus.enabled} value={bulkStatus.value} onValueChange={(v) => setBulkStatus(p => ({ ...p, value: v }))}>
+                <SelectTrigger className="bg-secondary border-border flex-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["rascunho","pendente","aprovado","pago","recebido","cancelado"].map(s => (
+                    <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Competência */}
+            <div className="flex items-center gap-3">
+              <input type="checkbox" className="accent-primary" checked={bulkCompetencia.enabled} onChange={(e) => setBulkCompetencia(p => ({ ...p, enabled: e.target.checked }))} />
+              <Label className="w-28 shrink-0">Competência</Label>
+              <Input type="month" disabled={!bulkCompetencia.enabled} value={bulkCompetencia.value} onChange={(e) => setBulkCompetencia(p => ({ ...p, value: e.target.value }))} className="bg-secondary border-border flex-1" />
+            </div>
+
+            {/* Categoria */}
+            <div className="flex items-center gap-3">
+              <input type="checkbox" className="accent-primary" checked={bulkCategoriaId.enabled} onChange={(e) => setBulkCategoriaId(p => ({ ...p, enabled: e.target.checked }))} />
+              <Label className="w-28 shrink-0">Categoria</Label>
+              <Select disabled={!bulkCategoriaId.enabled} value={toSv(bulkCategoriaId.value)} onValueChange={(v) => setBulkCategoriaId(p => ({ ...p, value: v === "__none__" ? "" : v }))}>
+                <SelectTrigger className="bg-secondary border-border flex-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Nenhuma —</SelectItem>
+                  {categorias.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Conta */}
+            <div className="flex items-center gap-3">
+              <input type="checkbox" className="accent-primary" checked={bulkContaId.enabled} onChange={(e) => setBulkContaId(p => ({ ...p, enabled: e.target.checked }))} />
+              <Label className="w-28 shrink-0">Conta</Label>
+              <Select disabled={!bulkContaId.enabled} value={toSv(bulkContaId.value)} onValueChange={(v) => setBulkContaId(p => ({ ...p, value: v === "__none__" ? "" : v }))}>
+                <SelectTrigger className="bg-secondary border-border flex-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Nenhuma —</SelectItem>
+                  {contasBancarias.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nome}{c.banco ? ` (${c.banco})` : ""}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Forma */}
+            <div className="flex items-center gap-3">
+              <input type="checkbox" className="accent-primary" checked={bulkForma.enabled} onChange={(e) => setBulkForma(p => ({ ...p, enabled: e.target.checked }))} />
+              <Label className="w-28 shrink-0">Forma pgto.</Label>
+              <Select disabled={!bulkForma.enabled} value={toSv(bulkForma.value)} onValueChange={(v) => setBulkForma(p => ({ ...p, value: v === "__none__" ? "" : v }))}>
+                <SelectTrigger className="bg-secondary border-border flex-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Não informado —</SelectItem>
+                  {FORMA_PGTO.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleBulkUpdate} disabled={!bulkStatus.enabled && !bulkCompetencia.enabled && !bulkCategoriaId.enabled && !bulkContaId.enabled && !bulkForma.enabled}>
+              Aplicar alterações
             </Button>
           </div>
         </DialogContent>
