@@ -55,7 +55,7 @@ const SYSTEM_FIELDS: Record<ImportType, SystemField[]> = {
     { name: "desconto", label: "Desconto (R$)", required: false, type: "number", keywords: ["desconto", "discount", "abatim"] },
     { name: "taxas", label: "Taxas (R$)", required: false, type: "number", keywords: ["taxa", "fee", "tarifas", "encargo"] },
     { name: "status", label: "Status / Situação", required: false, type: "text", keywords: ["status", "situac", "estado", "situacao", "pago", "quitad"] },
-    { name: "observacoes", label: "Observações", required: false, type: "text", keywords: ["obs", "coment", "remark", "detalhe"] },
+    { name: "observacao", label: "Observações", required: false, type: "text", keywords: ["obs", "coment", "remark", "detalhe"] },
   ],
   contas_receber: [
     { name: "descricao", label: "Descrição", required: true, type: "text", keywords: ["descri", "nome", "histor", "servico", "item"] },
@@ -74,7 +74,7 @@ const SYSTEM_FIELDS: Record<ImportType, SystemField[]> = {
     { name: "desconto", label: "Desconto (R$)", required: false, type: "number", keywords: ["desconto", "discount", "abatim"] },
     { name: "taxas", label: "Taxas (R$)", required: false, type: "number", keywords: ["taxa", "fee", "tarifas", "encargo"] },
     { name: "status", label: "Status / Situação", required: false, type: "text", keywords: ["status", "situac", "estado", "situacao", "recebid", "quitad"] },
-    { name: "observacoes", label: "Observações", required: false, type: "text", keywords: ["obs", "coment", "detalhe"] },
+    { name: "observacao", label: "Observações", required: false, type: "text", keywords: ["obs", "coment", "detalhe"] },
   ],
   aportes: [
     { name: "descricao", label: "Descrição", required: true, type: "text", keywords: ["descri", "histor", "nome", "operac"] },
@@ -89,14 +89,14 @@ const SYSTEM_FIELDS: Record<ImportType, SystemField[]> = {
       enumValues: ["aporte_capital", "emprestimo_socio", "adiantamento_socio", "retirada_socio", "devolucao_socio"],
       keywords: ["tipo", "operac", "modalid", "natureza"],
     },
-    { name: "observacoes", label: "Observações", required: false, type: "text", keywords: ["obs", "nota", "coment"] },
+    { name: "observacao", label: "Observações", required: false, type: "text", keywords: ["obs", "nota", "coment"] },
   ],
   extrato: [
     { name: "descricao",   label: "Descrição",                                          required: true,  type: "text",   keywords: ["descri", "histor", "lancam", "memorial", "detalhe", "movimento"] },
     { name: "valor",       label: "Valor (negativo = despesa, positivo = receita)",      required: true,  type: "number", keywords: ["valor", "montante", "amount", "credito", "debito", "movim"] },
     { name: "data",        label: "Data",                                               required: true,  type: "date",   keywords: ["data", "date", "lancam", "operac"] },
     { name: "categoria",   label: "Categoria",                                          required: false, type: "text",   keywords: ["categ", "classif", "grupo"] },
-    { name: "observacoes", label: "Observações",                                        required: false, type: "text",   keywords: ["obs", "coment", "detalhe"] },
+    { name: "observacao", label: "Observações",                                        required: false, type: "text",   keywords: ["obs", "coment", "detalhe"] },
   ],
 };
 
@@ -401,7 +401,7 @@ export default function Importacao() {
           vencimento,
           competencia: competencia || null,
           categoria_id: v.categoria ? findId(categorias, v.categoria) : null,
-          observacoes: v.observacoes || null,
+          observacao: v.observacoes || null,
           status,
           ...(importacaoId ? { importacao_id: importacaoId } : {}),
         };
@@ -452,7 +452,7 @@ export default function Importacao() {
           data: parseDate(v.data) || "",
           socio_id: v.socio ? findId(socios, v.socio) : null,
           tipo: v.tipo as any,
-          observacoes: v.observacoes || null,
+          observacao: v.observacoes || null,
           status: "pendente" as any,
           ...(importacaoId ? { importacao_id: importacaoId } : {}),
         };
@@ -479,7 +479,7 @@ export default function Importacao() {
           valor: Math.abs(valor),
           vencimento,
           competencia: deriveCompetencia(vencimento) || null,
-          observacoes: v.observacoes || null,
+          observacao: v.observacoes || null,
           status: "pendente",
           ...(importacaoId ? { importacao_id: importacaoId } : {}),
         };

@@ -329,7 +329,7 @@ export default function Lancamentos() {
     setEditingRow(row);
     const f: Form = {};
     if (row._tipo === "aporte") {
-      ["descricao","valor","tipo","socio_id","observacoes"].forEach((k) => { if (row[k] != null) f[k] = String(row[k]); });
+      ["descricao","valor","tipo","socio_id","observacao"].forEach((k) => { if (row[k] != null) f[k] = String(row[k]); });
       if (row.data) f.vencimento = String(row.data);
     } else if (row._tipo === "distribuicao") {
       ["competencia","valor_total","observacao"].forEach((k) => { if (row[k] != null) f[k] = String(row[k]); });
@@ -339,7 +339,7 @@ export default function Lancamentos() {
         "descricao","valor","vencimento","competencia","fornecedor_id","cliente_id",
         "categoria_id","centro_custo_id","conta_caixa_id","forma_pagamento","data_movimento",
         "data_prevista","nota_fiscal","valor_original","juros","multa","desconto","taxas",
-        "recorrencia","qtd_recorrencia","observacoes",
+        "recorrencia","qtd_recorrencia","observacao",
       ].forEach((k) => { if (row[k] != null) f[k] = String(row[k]); });
       if (row.agendado) f.agendado = "true";
     }
@@ -381,7 +381,7 @@ export default function Lancamentos() {
       origem_lancamento: "manual",
       recorrencia: (campo(form, "recorrencia") || "nenhuma") as any,
       qtd_recorrencia: campo(form, "qtd_recorrencia") ? Number(campo(form, "qtd_recorrencia")) : null,
-      observacoes: campo(form, "observacoes") || null,
+      observacao: campo(form, "observacao") || null,
       status,
       criado_por: user?.id,
     };
@@ -402,7 +402,7 @@ export default function Lancamentos() {
       descricao: campo(form, "descricao") || null,
       valor: Number(campo(form, "valor")),
       data: campo(form, "vencimento") || new Date().toISOString().split("T")[0],
-      observacoes: campo(form, "observacoes") || null,
+      observacao: campo(form, "observacao") || null,
       status,
       criado_por: user?.id,
     };
@@ -1091,7 +1091,7 @@ export default function Lancamentos() {
                 </div>
                 <div className="space-y-2">
                   <Label>Observações</Label>
-                  <Textarea value={campo(form, "observacoes")} onChange={(e) => sf("observacoes", e.target.value)} rows={2} className="bg-secondary border-border resize-none" />
+                  <Textarea value={campo(form, "observacao")} onChange={(e) => sf("observacao", e.target.value)} rows={2} className="bg-secondary border-border resize-none" />
                 </div>
               </div>
             )}
@@ -1365,7 +1365,7 @@ export default function Lancamentos() {
             <div className="border-t border-border pt-4 space-y-3">
               <div className="space-y-2">
                 <Label>Observações</Label>
-                <Textarea value={campo(form, "observacoes")} onChange={(e) => sf("observacoes", e.target.value)} rows={2} className="bg-secondary border-border resize-none" />
+                <Textarea value={campo(form, "observacao")} onChange={(e) => sf("observacao", e.target.value)} rows={2} className="bg-secondary border-border resize-none" />
               </div>
               <div className="flex items-center gap-3">
                 <Switch checked={campo(form, "agendado") === "true"} onCheckedChange={(v) => sf("agendado", v ? "true" : "false")} />
@@ -1565,7 +1565,7 @@ export default function Lancamentos() {
               {/* Field-by-field selector */}
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Escolha qual valor manter em cada campo:</p>
-                {(["descricao","competencia","categoria_id","centro_custo_id","conta_caixa_id","forma_pagamento","fornecedor_id","cliente_id","nota_fiscal","observacoes","status"] as const).map((field) => {
+                {(["descricao","competencia","categoria_id","centro_custo_id","conta_caixa_id","forma_pagamento","fornecedor_id","cliente_id","nota_fiscal","observacao","status"] as const).map((field) => {
                   const vals = mergeGroup.records.map((r: any) => r[field]);
                   const unique = [...new Set(vals.filter(Boolean))];
                   if (unique.length === 0) return null;
@@ -1573,7 +1573,7 @@ export default function Lancamentos() {
                     descricao: "Descrição", competencia: "Competência", categoria_id: "Categoria",
                     centro_custo_id: "Centro de Custo", conta_caixa_id: "Conta", forma_pagamento: "Forma de Pagamento",
                     fornecedor_id: "Fornecedor", cliente_id: "Cliente", nota_fiscal: "Nota Fiscal",
-                    observacoes: "Observações", status: "Status",
+                    observacao: "Observações", status: "Status",
                   };
                   return (
                     <div key={field} className="grid grid-cols-1 sm:grid-cols-3 items-center gap-2 py-2 border-b border-border/40">

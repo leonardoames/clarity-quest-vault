@@ -169,7 +169,7 @@ export default function ContasPagar() {
     origem_lancamento: "manual",
     recorrencia: (campo(form, "recorrencia") || "nenhuma") as any,
     qtd_recorrencia: campo(form, "qtd_recorrencia") ? Number(campo(form, "qtd_recorrencia")) : null,
-    observacoes: campo(form, "observacoes") || null,
+    observacao: campo(form, "observacao") || null,
     status,
     criado_por: user?.id,
   });
@@ -550,7 +550,7 @@ export default function ContasPagar() {
             <div className="border-t border-border pt-4 space-y-3">
               <div className="space-y-2">
                 <Label>Observações</Label>
-                <Textarea value={campo(form,"observacoes")} onChange={(e) => sf("observacoes", e.target.value)} rows={2} className="bg-secondary border-border resize-none" />
+                <Textarea value={campo(form,"observacao")} onChange={(e) => sf("observacao", e.target.value)} rows={2} className="bg-secondary border-border resize-none" />
               </div>
               <div className="flex items-center gap-3">
                 <Switch
