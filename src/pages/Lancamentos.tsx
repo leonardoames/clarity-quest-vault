@@ -3,7 +3,7 @@ import {
   Plus, Search, Filter, Copy, CheckCircle, XCircle, ChevronDown, ChevronUp,
   ArrowDownCircle, ArrowUpCircle, ChevronLeft, ChevronRight, Wallet,
   TrendingUp, TrendingDown, Pencil, Activity, Trash2, AlertTriangle, Lock,
-  GitMerge, AlertCircle,
+  GitMerge, AlertCircle, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,52 @@ function labelMes(ym: string) {
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 }
 
+/**
+ * Local description improvement function.
+ * Expands common abbreviations used in financial entries and normalizes formatting.
+ */
+const ABBR_MAP: [RegExp, string][] = [
+  [/\bpgto\b/gi, "Pagamento"],
+  [/\bref\b/gi, "Referente a"],
+  [/\bforn\b/gi, "Fornecedor"],
+  [/\balug\b/gi, "Aluguel"],
+  [/\bsal\b/gi, "Salário"],
+  [/\badm\b/gi, "Administrativo"],
+  [/\bmkt\b/gi, "Marketing"],
+  [/\bparc\b/gi, "Parcela"],
+  [/\bvlr\b/gi, "Valor"],
+];
+
+function suggestDescription(text: string): string {
+  if (!text.trim()) return text;
+  let result = text.trim();
+  // Expand abbreviations
+  for (const [pattern, replacement] of ABBR_MAP) {
+    result = result.replace(pattern, replacement);
+  }
+  // Remove double spaces
+  result = result.replace(/\s{2,}/g, " ").trim();
+  // Capitalize first letter
+  result = result.charAt(0).toUpperCase() + result.slice(1);
+  return result;
+}
+
+const TIPO_ENTRADA_APORTE: Record<string, boolean> = {
+  aporte_capital: true,
+  emprestimo_socio: true,
+  adiantamento_socio: true,
+  retirada_socio: false,
+  devolucao_socio: false,
+};
+
+const TIPO_LABELS_APORTE: Record<string, string> = {
+  aporte_capital: "Aporte de Capital",
+  emprestimo_socio: "Empréstimo do Sócio",
+  adiantamento_socio: "Adiantamento do Sócio",
+  retirada_socio: "Retirada do Sócio",
+  devolucao_socio: "Devolução ao Sócio",
+};
+
 export default function Lancamentos() {
   const { user } = useAuth();
   const { empresaAtual } = useEmpresa();
@@ -78,12 +124,13 @@ export default function Lancamentos() {
   const [modoExtrato, setModoExtrato] = useState(false);
 
   // Dialog state
-  const [dialogTipo, setDialogTipo] = useState<"pagar" | "receber" | null>(null);
+  const [dialogTipo, setDialogTipo] = useState<"pagar" | "receber" | "aporte" | "distribuicao" | null>(null);
   const [editingRow, setEditingRow] = useState<any | null>(null);
   const [form, setForm] = useState<Form>({});
   const [showAjustes, setShowAjustes] = useState(false);
   const [showRecorrencia, setShowRecorrencia] = useState(false);
   const [qc, setQc] = useState<QuickCreate | null>(null);
+  const [suggestionText, setSuggestionText] = useState<string | null>(null);
 
   // Seleção em lote
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -150,6 +197,11 @@ export default function Lancamentos() {
   const { data: centrosCusto, insert: insertCentroCusto } = useEmpresaData<any>("centros_custo", { orderBy: "nome" });
   const { data: contasBancarias } = useEmpresaData<any>("contas_caixa", { orderBy: "nome" });
   const { data: fechamentos } = useEmpresaData<Record<string, unknown>>("fechamentos_mensais", { orderBy: "competencia" });
+  const { data: aportes, insert: insertAporte, update: updateAporte, remove: removeAporte } =
+    useEmpresaData<any>("movimentacoes_societarias", { select: "*, socios(nome)" });
+  const { data: distribuicoes, remove: removeDistribuicao } =
+    useEmpresaData<any>("distribuicoes_lucro", { select: "*" });
+  const { data: socios } = useEmpresaData<any>("socios", { orderBy: "nome" });
 
   const loading = lpagar || lreceber;
 
@@ -157,8 +209,25 @@ export default function Lancamentos() {
   const lancamentos = useMemo(() => {
     const pagar = contasPagar.map((c: any) => ({ ...c, _tipo: "pagar" as const }));
     const receber = contasReceber.map((c: any) => ({ ...c, _tipo: "receber" as const }));
+    const aporteMapped = aportes.map((a: any) => ({
+      ...a,
+      _tipo: "aporte" as const,
+      descricao: a.descricao || TIPO_LABELS_APORTE[a.tipo] || a.tipo,
+      valor: a.valor,
+      vencimento: a.data,
+      status: a.status,
+      _entrada: TIPO_ENTRADA_APORTE[a.tipo],
+    }));
+    const distMapped = distribuicoes.map((d: any) => ({
+      ...d,
+      _tipo: "distribuicao" as const,
+      descricao: `Distribuição ${d.competencia}`,
+      valor: d.valor_total,
+      vencimento: d.data_efetiva || (d.competencia ? d.competencia + "-01" : null),
+      status: d.status,
+    }));
 
-    return [...pagar, ...receber]
+    return [...pagar, ...receber, ...aporteMapped, ...distMapped]
       .filter((c) => {
         // Period filter
         if (periodoTipo === "mes") {
@@ -175,7 +244,11 @@ export default function Lancamentos() {
         if (filtroTipo !== "todos" && c._tipo !== filtroTipo) return false;
         if (modoExtrato) {
           if (!["pago", "recebido"].includes(c.status)) return false;
-        } else if (filtroStatus !== "todos" && c.status !== filtroStatus) return false;
+        } else if (filtroStatus !== "todos") {
+          // "reprovado" only applies to pagar/receber as "cancelado"; skip aportes/distribuições from status filter when reprovado selected
+          if (filtroStatus === "reprovado" && (c._tipo === "aporte" || c._tipo === "distribuicao")) return false;
+          if (c.status !== filtroStatus) return false;
+        }
         if (filtroCategoria !== "todas" && c.categoria_id !== filtroCategoria) return false;
         if (filtroConta !== "todas" && c.conta_caixa_id !== filtroConta) return false;
         if (busca) {
@@ -184,6 +257,7 @@ export default function Lancamentos() {
             (c.descricao || "").toLowerCase().includes(b) ||
             (c.fornecedores?.nome || "").toLowerCase().includes(b) ||
             (c.clientes?.nome || "").toLowerCase().includes(b) ||
+            (c.socios?.nome || "").toLowerCase().includes(b) ||
             (c.nota_fiscal || "").toLowerCase().includes(b);
           if (!match) return false;
         }
@@ -198,7 +272,7 @@ export default function Lancamentos() {
           : (b.vencimento || "");
         return da.localeCompare(db);
       });
-  }, [contasPagar, contasReceber, periodoTipo, mes, filtroTipo, filtroStatus, filtroCategoria, filtroConta, busca, modoExtrato]);
+  }, [contasPagar, contasReceber, aportes, distribuicoes, periodoTipo, mes, filtroTipo, filtroStatus, filtroCategoria, filtroConta, busca, modoExtrato]);
 
   // (useEffect for page reset is defined after lancamentosComSaldo below)
 
@@ -241,25 +315,34 @@ export default function Lancamentos() {
   useEffect(() => { setCurrentPage(1); }, [lancamentos.length]);
 
   // Handlers
-  const openNew = (tipo: "pagar" | "receber") => {
+  const openNew = (tipo: "pagar" | "receber" | "aporte" | "distribuicao") => {
     setDialogTipo(tipo);
     setEditingRow(null);
     setForm({});
     setShowAjustes(false);
     setShowRecorrencia(false);
+    setSuggestionText(null);
   };
 
   const openEdit = (row: any) => {
     setDialogTipo(row._tipo);
     setEditingRow(row);
     const f: Form = {};
-    [
-      "descricao","valor","vencimento","competencia","fornecedor_id","cliente_id",
-      "categoria_id","centro_custo_id","conta_caixa_id","forma_pagamento","data_movimento",
-      "data_prevista","nota_fiscal","valor_original","juros","multa","desconto","taxas",
-      "recorrencia","qtd_recorrencia","observacoes",
-    ].forEach((k) => { if (row[k] != null) f[k] = String(row[k]); });
-    if (row.agendado) f.agendado = "true";
+    if (row._tipo === "aporte") {
+      ["descricao","valor","tipo","socio_id","observacoes"].forEach((k) => { if (row[k] != null) f[k] = String(row[k]); });
+      if (row.data) f.vencimento = String(row.data);
+    } else if (row._tipo === "distribuicao") {
+      ["competencia","valor_total","observacao"].forEach((k) => { if (row[k] != null) f[k] = String(row[k]); });
+      if (row.data_efetiva) f.vencimento = String(row.data_efetiva);
+    } else {
+      [
+        "descricao","valor","vencimento","competencia","fornecedor_id","cliente_id",
+        "categoria_id","centro_custo_id","conta_caixa_id","forma_pagamento","data_movimento",
+        "data_prevista","nota_fiscal","valor_original","juros","multa","desconto","taxas",
+        "recorrencia","qtd_recorrencia","observacoes",
+      ].forEach((k) => { if (row[k] != null) f[k] = String(row[k]); });
+      if (row.agendado) f.agendado = "true";
+    }
     setForm(f);
     setShowAjustes(false);
     setShowRecorrencia(false);
@@ -269,6 +352,7 @@ export default function Lancamentos() {
     setDialogTipo(null);
     setEditingRow(null);
     setForm({});
+    setSuggestionText(null);
   };
 
   const handleVencimentoChange = (v: string) => {
@@ -310,7 +394,29 @@ export default function Lancamentos() {
     return row.competencia || (row.vencimento ? row.vencimento.substring(0, 7) : "");
   };
 
+  const handleSaveAporte = async (status: string) => {
+    if (!campo(form, "socio_id") || !campo(form, "tipo") || !campo(form, "valor")) return;
+    const record: any = {
+      socio_id: campo(form, "socio_id"),
+      tipo: campo(form, "tipo"),
+      descricao: campo(form, "descricao") || null,
+      valor: Number(campo(form, "valor")),
+      data: campo(form, "vencimento") || new Date().toISOString().split("T")[0],
+      observacoes: campo(form, "observacoes") || null,
+      status,
+      criado_por: user?.id,
+    };
+    if (editingRow) {
+      await updateAporte(editingRow.id, record);
+    } else {
+      await insertAporte(record);
+    }
+    closeDialog();
+  };
+
   const handleSave = async (status: string) => {
+    if (dialogTipo === "aporte") { await handleSaveAporte(status); return; }
+    if (dialogTipo === "distribuicao") { closeDialog(); return; } // distribuicao editing not supported inline
     if (!campo(form, "descricao") || !campo(form, "valor") || !campo(form, "vencimento")) return;
     const record = buildRecord(status) as any;
 
@@ -412,6 +518,7 @@ export default function Lancamentos() {
     await Promise.all(Array.from(selectedIds).map(key => {
       const [tipo, id] = key.split("|");
       if (tipo === "pagar") return updatePagar(id, { status: "pago", data_pagamento: today, data_movimento: today } as any);
+      if (tipo === "aporte" || tipo === "distribuicao") return; // not applicable
       return updateReceber(id, { status: "recebido", data_recebimento: today, data_movimento: today } as any);
     }));
     clearSelection();
@@ -429,6 +536,9 @@ export default function Lancamentos() {
         let s = bulkStatus.value;
         if (tipo === "pagar" && s === "recebido") s = "pago";
         if (tipo === "receber" && s === "pago") s = "recebido";
+        // "reprovado" is only valid for movimentacoes_societarias / distribuicoes_lucro,
+        // not for contas_pagar or contas_receber — use "cancelado" instead.
+        if ((tipo === "pagar" || tipo === "receber") && s === "reprovado") s = "cancelado";
         patch.status = s;
         if (s === "pago")     { patch.data_pagamento  = today; patch.data_movimento = today; }
         if (s === "recebido") { patch.data_recebimento = today; patch.data_movimento = today; }
@@ -438,6 +548,7 @@ export default function Lancamentos() {
       if (bulkContaId.enabled     && bulkContaId.value)     patch.conta_caixa_id = bulkContaId.value;
       if (bulkForma.enabled       && bulkForma.value)       patch.forma_pagamento = bulkForma.value;
       if (tipo === "pagar") return updatePagar(id, patch);
+      if (tipo === "aporte" || tipo === "distribuicao") return; // not applicable for bulk field update
       return updateReceber(id, patch);
     }));
 
@@ -452,6 +563,8 @@ export default function Lancamentos() {
   };
 
   const handleDelete = async (row: any) => {
+    if (row._tipo === "aporte") { await removeAporte(row.id); setDeleteTarget(null); return; }
+    if (row._tipo === "distribuicao") { await removeDistribuicao(row.id); setDeleteTarget(null); return; }
     const comp = getRecordCompetencia(row);
     if (comp && isCompetenciaFechada(fechamentos, comp)) {
       toast({ title: "Não é possível editar lançamentos de um mês fechado", variant: "destructive" });
@@ -467,6 +580,8 @@ export default function Lancamentos() {
     await Promise.all(Array.from(selectedIds).map(key => {
       const [tipo, id] = key.split("|");
       if (tipo === "pagar") return removePagar(id);
+      if (tipo === "aporte") return removeAporte(id);
+      if (tipo === "distribuicao") return removeDistribuicao(id);
       return removeReceber(id);
     }));
     clearSelection();
@@ -485,7 +600,11 @@ export default function Lancamentos() {
   };
 
   const isPagar = dialogTipo === "pagar";
-  const formInvalid = !campo(form, "descricao") || !campo(form, "valor") || !campo(form, "vencimento");
+  const isAporte = dialogTipo === "aporte";
+  const isDistribuicao = dialogTipo === "distribuicao";
+  const formInvalid = isAporte
+    ? !campo(form, "socio_id") || !campo(form, "tipo") || !campo(form, "valor")
+    : !campo(form, "descricao") || !campo(form, "valor") || !campo(form, "vencimento");
   const colSpan = modoExtrato ? 13 : 12;
 
   return (
@@ -525,6 +644,24 @@ export default function Lancamentos() {
           >
             <ArrowDownCircle className="h-4 w-4 mr-2" />Nova Saída
           </Button>
+          {canWrite && (
+            <Button
+              variant="outline"
+              onClick={() => openNew("aporte")}
+              className="text-blue-500 border-blue-500/30 hover:bg-blue-500/10"
+            >
+              <Plus className="h-4 w-4 mr-2" />Novo Aporte
+            </Button>
+          )}
+          {canWrite && (
+            <Button
+              variant="outline"
+              onClick={() => openNew("distribuicao")}
+              className="text-purple-500 border-purple-500/30 hover:bg-purple-500/10"
+            >
+              <Plus className="h-4 w-4 mr-2" />Nova Distribuição
+            </Button>
+          )}
         </div>
       </div>
 
@@ -576,6 +713,8 @@ export default function Lancamentos() {
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="receber">Entradas</SelectItem>
             <SelectItem value="pagar">Saídas</SelectItem>
+            <SelectItem value="aporte">Aportes</SelectItem>
+            <SelectItem value="distribuicao">Distribuições</SelectItem>
           </SelectContent>
         </Select>
 
@@ -748,6 +887,20 @@ export default function Lancamentos() {
                       <span className="flex items-center gap-1 text-xs text-destructive font-medium whitespace-nowrap">
                         <ArrowDownCircle className="h-3.5 w-3.5" />Saída
                       </span>
+                    ) : c._tipo === "aporte" ? (
+                      <span className="flex items-center gap-1 text-xs font-medium whitespace-nowrap" style={{ color: c._entrada ? "rgb(34 197 94)" : "rgb(239 68 68)" }}>
+                        {c._entrada ? <ArrowUpCircle className="h-3.5 w-3.5" /> : <ArrowDownCircle className="h-3.5 w-3.5" />}
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" style={{ background: c.tipo === "retirada_socio" || c.tipo === "devolucao_socio" ? "rgba(249,115,22,0.15)" : "rgba(34,197,94,0.15)", color: c.tipo === "retirada_socio" || c.tipo === "devolucao_socio" ? "rgb(249,115,22)" : "rgb(34,197,94)", border: `1px solid ${c.tipo === "retirada_socio" || c.tipo === "devolucao_socio" ? "rgba(249,115,22,0.3)" : "rgba(34,197,94,0.3)"}` }}>
+                          Aporte
+                        </span>
+                      </span>
+                    ) : c._tipo === "distribuicao" ? (
+                      <span className="flex items-center gap-1 text-xs font-medium whitespace-nowrap">
+                        <ArrowDownCircle className="h-3.5 w-3.5 text-purple-400" />
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                          Distribuição
+                        </span>
+                      </span>
                     ) : (
                       <span className="flex items-center gap-1 text-xs text-success font-medium whitespace-nowrap">
                         <ArrowUpCircle className="h-3.5 w-3.5" />Entrada
@@ -759,17 +912,18 @@ export default function Lancamentos() {
                   </td>
                   <td>
                     <div className="flex items-center gap-1.5">
-                      {isCompetenciaFechada(fechamentos, getRecordCompetencia(c)) && (
+                      {(c._tipo === "pagar" || c._tipo === "receber") && isCompetenciaFechada(fechamentos, getRecordCompetencia(c)) && (
                         <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" title="Mês fechado" />
                       )}
                       <div>
                         <p className="font-medium">{c.descricao}</p>
+                        {c._tipo === "aporte" && <p className="text-xs text-muted-foreground">{TIPO_LABELS_APORTE[c.tipo] || c.tipo}</p>}
                         {c.nota_fiscal && <p className="text-xs text-muted-foreground">NF: {c.nota_fiscal}</p>}
                       </div>
                     </div>
                   </td>
                   <td className="text-muted-foreground text-sm">
-                    {c.fornecedores?.nome || c.clientes?.nome || "—"}
+                    {c._tipo === "aporte" ? (c.socios?.nome || "—") : (c.fornecedores?.nome || c.clientes?.nome || "—")}
                   </td>
                   <td className="text-muted-foreground text-sm">
                     {c.categorias_financeiras?.nome || "—"}
@@ -780,8 +934,13 @@ export default function Lancamentos() {
                   <td className="text-muted-foreground text-sm">
                     {c.contas_caixa ? `${c.contas_caixa.nome}${c.contas_caixa.banco ? ` (${c.contas_caixa.banco})` : ""}` : "—"}
                   </td>
-                  <td className={`text-right font-medium font-mono ${c._tipo === "pagar" ? "text-destructive" : "text-success"}`}>
-                    {c._tipo === "pagar" ? "−" : "+"}{formatCurrency(Number(c.valor))}
+                  <td className={`text-right font-medium font-mono ${
+                    c._tipo === "pagar" ? "text-destructive"
+                    : c._tipo === "aporte" ? (c._entrada ? "text-success" : "text-destructive")
+                    : c._tipo === "distribuicao" ? "text-purple-400"
+                    : "text-success"
+                  }`}>
+                    {(c._tipo === "pagar" || (c._tipo === "aporte" && !c._entrada)) ? "−" : "+"}{formatCurrency(Number(c.valor))}
                   </td>
                   <td>
                     <div className="flex items-center gap-1.5">
@@ -805,15 +964,17 @@ export default function Lancamentos() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar" onClick={() => openEdit(c)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Duplicar" onClick={() => handleDuplicate(c)}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
+                      {(c._tipo === "pagar" || c._tipo === "receber") && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Duplicar" onClick={() => handleDuplicate(c)}>
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       {canWrite && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir" onClick={() => setDeleteTarget(c)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      {canApprove && c.status === "pendente" && (
+                      {canApprove && c.status === "pendente" && (c._tipo === "pagar" || c._tipo === "receber") && (
                         <>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-success" title="Aprovar" onClick={() => handleApprove(c)}>
                             <CheckCircle className="h-3.5 w-3.5" />
@@ -823,7 +984,7 @@ export default function Lancamentos() {
                           </Button>
                         </>
                       )}
-                      {c.status === "aprovado" && (
+                      {c.status === "aprovado" && (c._tipo === "pagar" || c._tipo === "receber") && (
                         <Button variant="ghost" size="sm" className="h-7 text-xs text-success" onClick={() => handleMarkDone(c)}>
                           {c._tipo === "pagar" ? "Pagar" : "Receber"}
                         </Button>
@@ -876,16 +1037,81 @@ export default function Lancamentos() {
         <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-xl lg:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              {editingRow ? "Editar Lançamento" : isPagar ? "Nova Saída" : "Nova Entrada"}
-              {" — "}
-              <span className={isPagar ? "text-destructive" : "text-success"}>
-                {isPagar ? "Contas a Pagar" : "Contas a Receber"}
-              </span>
+              {isAporte
+                ? (editingRow ? "Editar Aporte" : "Novo Aporte / Movimentação Societária")
+                : isDistribuicao
+                ? (editingRow ? "Editar Distribuição" : "Nova Distribuição de Lucro")
+                : editingRow ? "Editar Lançamento" : isPagar ? "Nova Saída" : "Nova Entrada"}
+              {!isAporte && !isDistribuicao && (
+                <>
+                  {" — "}
+                  <span className={isPagar ? "text-destructive" : "text-success"}>
+                    {isPagar ? "Contas a Pagar" : "Contas a Receber"}
+                  </span>
+                </>
+              )}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 max-h-[75vh] overflow-y-auto pr-2">
 
-            {/* Informações Básicas */}
+            {/* Aporte Form */}
+            {isAporte && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Sócio <span className="text-destructive">*</span></Label>
+                  <Select value={campo(form, "socio_id")} onValueChange={(v) => sf("socio_id", v)}>
+                    <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Selecionar sócio" /></SelectTrigger>
+                    <SelectContent>
+                      {socios.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Tipo <span className="text-destructive">*</span></Label>
+                  <Select value={campo(form, "tipo")} onValueChange={(v) => sf("tipo", v)}>
+                    <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Tipo de movimentação" /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(TIPO_LABELS_APORTE).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Descrição</Label>
+                  <Input value={campo(form, "descricao")} onChange={(e) => sf("descricao", e.target.value)} className="bg-secondary border-border" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Valor (R$) <span className="text-destructive">*</span></Label>
+                    <Input type="number" step="0.01" min="0" value={campo(form, "valor")} onChange={(e) => sf("valor", e.target.value)} className="bg-secondary border-border font-mono" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Data</Label>
+                    <Input type="date" value={campo(form, "vencimento")} onChange={(e) => sf("vencimento", e.target.value)} className="bg-secondary border-border" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Observações</Label>
+                  <Textarea value={campo(form, "observacoes")} onChange={(e) => sf("observacoes", e.target.value)} rows={2} className="bg-secondary border-border resize-none" />
+                </div>
+              </div>
+            )}
+
+            {/* Distribuição Form — read-only notice (complex form handled in Distribuição page) */}
+            {isDistribuicao && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">Para criar ou editar uma distribuição de lucro com valores por sócio, utilize a página <strong>Distribuição</strong> no menu lateral. Aqui você pode visualizar e excluir registros.</p>
+                {editingRow && (
+                  <div className="space-y-2 text-sm">
+                    <div><span className="text-muted-foreground">Competência: </span><span className="font-medium">{editingRow.competencia}</span></div>
+                    <div><span className="text-muted-foreground">Valor Total: </span><span className="font-medium">{formatCurrency(Number(editingRow.valor_total))}</span></div>
+                    <div><span className="text-muted-foreground">Status: </span><StatusBadge status={editingRow.status} /></div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Standard pagar/receber form */}
+            {!isAporte && !isDistribuicao && (<>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <div className="h-1 w-1 rounded-full bg-primary" />
@@ -893,12 +1119,56 @@ export default function Lancamentos() {
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">Descrição <span className="text-destructive">*</span></Label>
-                <Input
-                  value={campo(form, "descricao")}
-                  onChange={(e) => sf("descricao", e.target.value)}
-                  className="bg-secondary border-primary/30 ring-primary/20 text-base"
-                  placeholder={isPagar ? "Ex: Aluguel escritório" : "Ex: Venda de produto"}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    value={campo(form, "descricao")}
+                    onChange={(e) => { sf("descricao", e.target.value); setSuggestionText(null); }}
+                    className="bg-secondary border-primary/30 ring-primary/20 text-base flex-1"
+                    placeholder={isPagar ? "Ex: Aluguel escritório" : "Ex: Venda de produto"}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 border-primary/30 text-primary hover:bg-primary/10"
+                    title="Sugerir melhoria na descrição"
+                    onClick={() => {
+                      const current = campo(form, "descricao");
+                      if (!current.trim()) return;
+                      const improved = suggestDescription(current);
+                      if (improved !== current) setSuggestionText(improved);
+                    }}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1" />
+                    Sugerir
+                  </Button>
+                </div>
+                {suggestionText !== null && (
+                  <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Sugestão</p>
+                    <p className="text-foreground">{suggestionText}</p>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="default"
+                        className="h-7 text-xs"
+                        onClick={() => { sf("descricao", suggestionText); setSuggestionText(null); }}
+                      >
+                        Usar sugestão
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs text-muted-foreground"
+                        onClick={() => setSuggestionText(null)}
+                      >
+                        Ignorar
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1102,19 +1372,22 @@ export default function Lancamentos() {
                 <Label className="cursor-pointer">Lançamento agendado</Label>
               </div>
             </div>
+            </>)} {/* end !isAporte && !isDistribuicao */}
           </div>
 
           {/* Footer */}
           <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
-            {!editingRow && (
+            {!isDistribuicao && !editingRow && (
               <Button variant="secondary" onClick={() => handleSave("rascunho")} disabled={formInvalid}>
                 Rascunho
               </Button>
             )}
-            <Button onClick={() => handleSave(editingRow ? editingRow.status : "pendente")} disabled={formInvalid}>
-              {editingRow ? "Salvar alterações" : "Enviar p/ Aprovação"}
-            </Button>
+            {!isDistribuicao && (
+              <Button onClick={() => handleSave(editingRow ? editingRow.status : "pendente")} disabled={formInvalid}>
+                {editingRow ? "Salvar alterações" : isAporte ? "Salvar Aporte" : "Enviar p/ Aprovação"}
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

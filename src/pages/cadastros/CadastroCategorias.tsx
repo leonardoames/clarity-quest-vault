@@ -1,7 +1,26 @@
 import CadastroGenerico from "./CadastroGenerico";
 import React from "react";
+import { Button } from "@/components/ui/button";
+import { useEmpresa } from "@/contexts/EmpresaContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export default function CadastroCategorias() {
+  const { empresaAtual } = useEmpresa();
+  const { toast } = useToast();
+
+  const handleCriarPadrao = async () => {
+    if (!empresaAtual?.id) return;
+    await (supabase.rpc as any)("criar_categorias_padrao", { p_empresa_id: empresaAtual.id });
+    toast({ title: "Categorias padrão criadas" });
+  };
+
+  const handleCriarEcommerce = async () => {
+    if (!empresaAtual?.id) return;
+    await (supabase.rpc as any)("criar_categorias_ecommerce", { p_empresa_id: empresaAtual.id });
+    toast({ title: "Categorias e-commerce criadas" });
+  };
+
   return (
     <CadastroGenerico
       title="Categorias Financeiras"
@@ -22,6 +41,16 @@ export default function CadastroCategorias() {
           return labels[v as string] || String(v);
         }},
       ]}
+      extraActions={
+        <>
+          <Button variant="outline" size="sm" onClick={handleCriarPadrao}>
+            Criar Categorias Padrão
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleCriarEcommerce}>
+            Categorias E-commerce
+          </Button>
+        </>
+      }
     />
   );
 }

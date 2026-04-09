@@ -23,9 +23,10 @@ interface CadastroGenericoProps {
   fields: FieldConfig[];
   activeField?: string;
   columns: { key: string; label: string; render?: (val: unknown, row: Record<string, unknown>) => React.ReactNode }[];
+  extraActions?: React.ReactNode;
 }
 
-export default function CadastroGenerico({ title, table, fields, activeField = "ativo", columns }: CadastroGenericoProps) {
+export default function CadastroGenerico({ title, table, fields, activeField = "ativo", columns, extraActions }: CadastroGenericoProps) {
   const navigate = useNavigate();
   const { data, loading, insert, update } = useEmpresaData<Record<string, unknown>>(table, { orderBy: "nome" });
 
@@ -88,7 +89,10 @@ export default function CadastroGenerico({ title, table, fields, activeField = "
             <p className="text-sm text-muted-foreground mt-1">{data.length} registro(s)</p>
           </div>
         </div>
-        <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Novo</Button>
+        <div className="flex items-center gap-2">
+          {extraActions}
+          <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Novo</Button>
+        </div>
       </div>
 
       {/* Create / Edit Dialog */}
