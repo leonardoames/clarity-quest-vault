@@ -3,6 +3,7 @@ import {
   Plus, Search, Filter, Copy, CheckCircle, XCircle, ChevronDown, ChevronUp,
   ArrowDownCircle, ArrowUpCircle, ChevronLeft, ChevronRight, Wallet,
   TrendingUp, TrendingDown, Pencil, Activity, Trash2, AlertTriangle, Lock,
+  GitMerge, AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useRole } from "@/hooks/useRole";
 import { gerarLancamentosRecorrentes } from "@/lib/recurrence";
 import { isCompetenciaFechada } from "@/pages/Fechamento";
+import { detectDuplicates, type DuplicateGroup } from "@/lib/duplicates";
 
 const FORMA_PGTO = [
   { value: "pix", label: "PIX" },
@@ -95,6 +97,12 @@ export default function Lancamentos() {
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+
+  // Duplicate detection
+  const [dismissedDuplicates, setDismissedDuplicates] = useState(false);
+  const [mergeGroup, setMergeGroup] = useState<DuplicateGroup | null>(null);
+  const [mergeForm, setMergeForm] = useState<Record<string, any>>({});
+  const [currentDupIndex, setCurrentDupIndex] = useState(0);
 
   // Pagination
   const PAGE_SIZE = 20;
@@ -213,6 +221,11 @@ export default function Lancamentos() {
       return { ...c, saldoAcumulado: bal };
     });
   }, [lancamentos, modoExtrato]);
+
+  const duplicateGroups = useMemo(
+    () => detectDuplicates([...contasPagar.map((c: any) => ({ ...c, _tipo: "pagar" })), ...contasReceber.map((c: any) => ({ ...c, _tipo: "receber" }))]),
+    [contasPagar, contasReceber]
+  );
 
   // Defined here (after lancamentosComSaldo) to avoid TDZ error
   const toggleSelectAll = () => {
@@ -668,6 +681,24 @@ export default function Lancamentos() {
           </p>
         </div>
       </div>
+
+      {/* Duplicate Detection Banner */}
+      {duplicateGroups.length > 0 && !dismissedDuplicates && (
+        <div className="flex items-center gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm mb-4">
+          <AlertCircle className="h-4 w-4 text-yellow-500 shrink-0" />
+          <span className="text-yellow-200 flex-1">
+            <span className="font-semibold">{duplicateGroups.length} {duplicateGroups.length === 1 ? "possível duplicata encontrada" : "possíveis duplicatas encontradas"}</span>
+            {" "}nos últimos 90 dias
+          </span>
+          <Button size="sm" variant="outline" className="border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/20 h-7 text-xs"
+            onClick={() => { setCurrentDupIndex(0); setMergeGroup(duplicateGroups[0]); const first = duplicateGroups[0].records[0]; setMergeForm(Object.fromEntries(Object.entries(first).filter(([k]) => !["id","created_at","updated_at","_tipo"].includes(k)))); }}>
+            Revisar
+          </Button>
+          <button onClick={() => setDismissedDuplicates(true)} className="text-yellow-500/60 hover:text-yellow-400 ml-1">
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="stat-card p-0 overflow-hidden">
@@ -1236,6 +1267,116 @@ export default function Lancamentos() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Merge/Delete Duplicate Dialog */}
+      {mergeGroup && (
+        <Dialog open={!!mergeGroup} onOpenChange={(o) => { if (!o) setMergeGroup(null); }}>
+          <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <GitMerge className="h-5 w-5 text-yellow-500" />
+                Revisar Duplicata {currentDupIndex + 1} de {duplicateGroups.length}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* similarity badge */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full font-mono">
+                  {Math.round(mergeGroup.similarity * 100)}% similar
+                </span>
+                <span>Valor: {formatCurrency(mergeGroup.records[0]?.valor)}</span>
+                <span>Vencimento: {mergeGroup.records[0]?.vencimento}</span>
+              </div>
+
+              {/* Field-by-field selector */}
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Escolha qual valor manter em cada campo:</p>
+                {(["descricao","competencia","categoria_id","centro_custo_id","conta_caixa_id","forma_pagamento","fornecedor_id","cliente_id","nota_fiscal","observacoes","status"] as const).map((field) => {
+                  const vals = mergeGroup.records.map((r: any) => r[field]);
+                  const unique = [...new Set(vals.filter(Boolean))];
+                  if (unique.length === 0) return null;
+                  const labels: Record<string, string> = {
+                    descricao: "Descrição", competencia: "Competência", categoria_id: "Categoria",
+                    centro_custo_id: "Centro de Custo", conta_caixa_id: "Conta", forma_pagamento: "Forma de Pagamento",
+                    fornecedor_id: "Fornecedor", cliente_id: "Cliente", nota_fiscal: "Nota Fiscal",
+                    observacoes: "Observações", status: "Status",
+                  };
+                  return (
+                    <div key={field} className="grid grid-cols-1 sm:grid-cols-3 items-center gap-2 py-2 border-b border-border/40">
+                      <span className="text-xs font-medium text-muted-foreground">{labels[field] || field}</span>
+                      <div className="sm:col-span-2 flex flex-wrap gap-2">
+                        {unique.map((val, i) => (
+                          <button key={i}
+                            onClick={() => setMergeForm(p => ({ ...p, [field]: val }))}
+                            className={`text-xs px-3 py-1 rounded-full border transition-all ${mergeForm[field] === val ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}>
+                            {String(val).length > 40 ? String(val).substring(0, 40) + "…" : String(val)}
+                            <span className="ml-1 opacity-50">#{i + 1}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button className="flex-1" onClick={async () => {
+                  // Keep record[0] with mergeForm values, delete the rest
+                  const keep = mergeGroup.records[0];
+                  const fn = keep._tipo === "pagar" ? updatePagar : updateReceber;
+                  const rm = keep._tipo === "pagar" ? removePagar : removeReceber;
+                  await fn(keep.id, mergeForm);
+                  for (let i = 1; i < mergeGroup.records.length; i++) {
+                    const r = mergeGroup.records[i];
+                    const rmFn = r._tipo === "pagar" ? removePagar : removeReceber;
+                    await rmFn(r.id);
+                  }
+                  toast({ title: "Merge realizado com sucesso" });
+                  // Move to next group or close
+                  if (currentDupIndex + 1 < duplicateGroups.length) {
+                    const next = currentDupIndex + 1;
+                    setCurrentDupIndex(next);
+                    const nextGroup = duplicateGroups[next];
+                    setMergeGroup(nextGroup);
+                    setMergeForm(Object.fromEntries(Object.entries(nextGroup.records[0]).filter(([k]) => !["id","created_at","updated_at","_tipo"].includes(k))));
+                  } else {
+                    setMergeGroup(null);
+                    setDismissedDuplicates(false);
+                  }
+                }}>
+                  <GitMerge className="h-4 w-4 mr-2" />
+                  Fazer Merge (manter #1)
+                </Button>
+                <Button variant="destructive" onClick={async () => {
+                  // Delete all but the first
+                  for (let i = 1; i < mergeGroup.records.length; i++) {
+                    const r = mergeGroup.records[i];
+                    const rmFn = r._tipo === "pagar" ? removePagar : removeReceber;
+                    await rmFn(r.id);
+                  }
+                  toast({ title: "Duplicata excluída" });
+                  if (currentDupIndex + 1 < duplicateGroups.length) {
+                    const next = currentDupIndex + 1;
+                    setCurrentDupIndex(next);
+                    const nextGroup = duplicateGroups[next];
+                    setMergeGroup(nextGroup);
+                    setMergeForm(Object.fromEntries(Object.entries(nextGroup.records[0]).filter(([k]) => !["id","created_at","updated_at","_tipo"].includes(k))));
+                  } else {
+                    setMergeGroup(null);
+                    setDismissedDuplicates(false);
+                  }
+                }}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir duplicata (#2+)
+                </Button>
+                <Button variant="ghost" onClick={() => setMergeGroup(null)}>Pular</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
