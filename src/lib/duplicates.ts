@@ -29,18 +29,30 @@ export interface DuplicateGroup {
   similarity: number; // 0-1
 }
 
+// Returns the best available date for a record (vencimento → competencia → data_movimento)
+function bestDate(r: any): string {
+  if (r.vencimento) return r.vencimento;
+  if (r.competencia) return r.competencia + "-01";
+  if (r.data_movimento) return r.data_movimento;
+  return "";
+}
+
 export function detectDuplicates(records: any[]): DuplicateGroup[] {
-  // Filter to last 90 days
+  // Filter to last 180 days (using best available date)
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 90);
+  cutoff.setDate(cutoff.getDate() - 180);
   const cutoffStr = cutoff.toISOString().split("T")[0];
 
-  const recent = records.filter(r => (r.vencimento || "") >= cutoffStr);
+  // Include records with any valid date within window, OR records with no date at all
+  const recent = records.filter(r => {
+    const d = bestDate(r);
+    return d === "" || d >= cutoffStr;
+  });
 
-  // Group by valor (as string with 2 decimals) + vencimento
+  // Group by valor (as string with 2 decimals) + best available date
   const groups = new Map<string, any[]>();
   for (const r of recent) {
-    const key = `${Number(r.valor || 0).toFixed(2)}|${r.vencimento || ""}`;
+    const key = `${Number(r.valor || 0).toFixed(2)}|${bestDate(r)}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }

@@ -688,7 +688,7 @@ export default function Lancamentos() {
           <AlertCircle className="h-4 w-4 text-yellow-500 shrink-0" />
           <span className="text-yellow-200 flex-1">
             <span className="font-semibold">{duplicateGroups.length} {duplicateGroups.length === 1 ? "possível duplicata encontrada" : "possíveis duplicatas encontradas"}</span>
-            {" "}nos últimos 90 dias
+            {" "}nos últimos 180 dias
           </span>
           <Button size="sm" variant="outline" className="border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/20 h-7 text-xs"
             onClick={() => { setCurrentDupIndex(0); setMergeGroup(duplicateGroups[0]); const first = duplicateGroups[0].records[0]; setMergeForm(Object.fromEntries(Object.entries(first).filter(([k]) => !["id","created_at","updated_at","_tipo"].includes(k)))); }}>
