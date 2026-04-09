@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
+import { useRole } from "@/hooks/useRole";
 import { gerarLancamentosRecorrentes } from "@/lib/recurrence";
 import { isCompetenciaFechada } from "@/pages/Fechamento";
 
@@ -62,6 +63,7 @@ export default function Lancamentos() {
   const { user } = useAuth();
   const { empresaAtual } = useEmpresa();
   const { toast } = useToast();
+  const { canWrite, canApprove, isVisualizador } = useRole();
 
   // Filters
   const [periodoTipo, setPeriodoTipo] = useState<"tudo" | "7dias" | "30dias" | "mes">("tudo");
@@ -470,6 +472,14 @@ export default function Lancamentos() {
 
   return (
     <div className="space-y-6">
+      {/* Read-only notice */}
+      {isVisualizador && (
+        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-sm text-yellow-700 dark:text-yellow-400">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          Você tem acesso somente leitura. Não é possível criar, editar ou excluir lançamentos.
+        </div>
+      )}
+
       {/* Header */}
       <div className="page-header">
         <div>
@@ -618,9 +628,11 @@ export default function Lancamentos() {
             <Button size="sm" className="text-xs" onClick={() => setBulkDialogOpen(true)}>
               <Pencil className="h-3 w-3 mr-1.5" />Editar em lote
             </Button>
-            <Button size="sm" variant="outline" className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={handleBulkDelete}>
-              <Trash2 className="h-3 w-3 mr-1.5" />Excluir selecionados
-            </Button>
+            {canWrite && (
+              <Button size="sm" variant="outline" className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={handleBulkDelete}>
+                <Trash2 className="h-3 w-3 mr-1.5" />Excluir selecionados
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -760,10 +772,12 @@ export default function Lancamentos() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Duplicar" onClick={() => handleDuplicate(c)}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir" onClick={() => setDeleteTarget(c)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                      {c.status === "pendente" && (
+                      {canWrite && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir" onClick={() => setDeleteTarget(c)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {canApprove && c.status === "pendente" && (
                         <>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-success" title="Aprovar" onClick={() => handleApprove(c)}>
                             <CheckCircle className="h-3.5 w-3.5" />

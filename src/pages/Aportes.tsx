@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useEmpresaData } from "@/hooks/useEmpresaData";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/hooks/useRole";
 
 const TIPO_LABELS: Record<string, string> = {
   aporte_capital: "Aporte de Capital",
@@ -29,6 +30,7 @@ const TIPO_ENTRADA: Record<string, boolean> = {
 
 export default function Aportes() {
   const { user } = useAuth();
+  const { canWrite, canApprove } = useRole();
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [busca, setBusca] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -85,9 +87,11 @@ export default function Aportes() {
           <p className="text-sm text-muted-foreground mt-1">Gestão societária</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Nova Movimentação</Button>
-          </DialogTrigger>
+          {canWrite && (
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-2" />Nova Movimentação</Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
             <DialogHeader><DialogTitle>Nova Movimentação Societária</DialogTitle></DialogHeader>
             <div className="space-y-4">
@@ -185,7 +189,7 @@ export default function Aportes() {
                             Enviar
                           </Button>
                         )}
-                        {m.status === "pendente" && (
+                        {canApprove && m.status === "pendente" && (
                           <>
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-success" onClick={() => handleApprove(m.id as string)}><CheckCircle className="h-3.5 w-3.5" /></Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleReject(m.id as string)}><XCircle className="h-3.5 w-3.5" /></Button>

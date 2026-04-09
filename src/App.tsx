@@ -1,11 +1,13 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster as Sonner, toast } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { EmpresaProvider } from "@/contexts/EmpresaContext";
 import { Layout } from "@/components/Layout";
+import { useRole } from "@/hooks/useRole";
 import Login from "./pages/Login";
 import ResetSenha from "./pages/ResetSenha";
 import Index from "./pages/Index";
@@ -28,6 +30,41 @@ import Importacao from "./pages/Importacao";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+function ProtectedRoute({
+  children,
+  requiredRole,
+}: {
+  children: React.ReactNode;
+  requiredRole?: string[];
+}) {
+  const { role, loading } = useRole();
+
+  const isDenied =
+    !loading &&
+    requiredRole &&
+    (role === null || !requiredRole.includes(role));
+
+  useEffect(() => {
+    if (isDenied) {
+      toast.error("Sem permissão para acessar esta página");
+    }
+  }, [isDenied]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-muted-foreground">Verificando permissões...</div>
+      </div>
+    );
+  }
+
+  if (isDenied) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -58,12 +95,12 @@ function AppRoutes() {
           <Route path="/contas-receber" element={<Navigate to="/lancamentos" replace />} />
           <Route path="/fluxo-caixa" element={<Navigate to="/lancamentos" replace />} />
           <Route path="/aportes" element={<Aportes />} />
-          <Route path="/distribuicao" element={<Distribuicao />} />
+          <Route path="/distribuicao" element={<ProtectedRoute requiredRole={["socio_admin", "financeiro_aprovador"]}><Distribuicao /></ProtectedRoute>} />
           <Route path="/dre" element={<DRE />} />
-          <Route path="/fechamento" element={<Fechamento />} />
+          <Route path="/fechamento" element={<ProtectedRoute requiredRole={["socio_admin", "financeiro_aprovador"]}><Fechamento /></ProtectedRoute>} />
           <Route path="/configuracoes" element={<Configuracoes />} />
-          <Route path="/configuracoes/usuarios" element={<GestaoUsuarios />} />
-          <Route path="/configuracoes/empresas" element={<CadastroEmpresas />} />
+          <Route path="/configuracoes/usuarios" element={<ProtectedRoute requiredRole={["socio_admin"]}><GestaoUsuarios /></ProtectedRoute>} />
+          <Route path="/configuracoes/empresas" element={<ProtectedRoute requiredRole={["socio_admin"]}><CadastroEmpresas /></ProtectedRoute>} />
           <Route path="/configuracoes/fornecedores" element={<CadastroFornecedores />} />
           <Route path="/configuracoes/clientes" element={<CadastroClientes />} />
           <Route path="/configuracoes/categorias" element={<CadastroCategorias />} />

@@ -16,6 +16,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
+import { useRole } from "@/hooks/useRole";
+import { AlertTriangle } from "lucide-react";
 
 const FORMA_PGTO = [
   { value: "pix", label: "PIX" },
@@ -47,6 +49,7 @@ export default function ContasReceber() {
   const { empresaAtual } = useEmpresa();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { canWrite, canApprove, isVisualizador } = useRole();
 
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [busca, setBusca] = useState("");
@@ -202,6 +205,14 @@ export default function ContasReceber() {
 
   return (
     <div className="space-y-6">
+      {/* Read-only notice */}
+      {isVisualizador && (
+        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-sm text-yellow-700 dark:text-yellow-400">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          Você tem acesso somente leitura. Não é possível criar, editar ou excluir lançamentos.
+        </div>
+      )}
+
       <div className="page-header">
         <div>
           <h1 className="page-title">Contas a Receber</h1>
@@ -296,7 +307,7 @@ export default function ContasReceber() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Duplicar" onClick={() => handleDuplicate(c)}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
-                      {c.status === "pendente" && (
+                      {canApprove && c.status === "pendente" && (
                         <>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-success" title="Aprovar" onClick={() => handleApprove(c.id)}>
                             <CheckCircle className="h-3.5 w-3.5" />
@@ -306,19 +317,21 @@ export default function ContasReceber() {
                           </Button>
                         </>
                       )}
-                      {c.status === "aprovado" && (
+                      {canWrite && c.status === "aprovado" && (
                         <Button variant="ghost" size="sm" className="h-7 text-xs text-success" onClick={() => handleMarkReceived(c.id)}>
                           Receber
                         </Button>
                       )}
-                      {c.status === "vencido" && (
+                      {canWrite && c.status === "vencido" && (
                         <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => handleMarkLost(c.id)}>
                           Perda
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir" onClick={() => handleDelete(c)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {canWrite && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir" onClick={() => handleDelete(c)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
