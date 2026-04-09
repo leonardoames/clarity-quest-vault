@@ -40,21 +40,8 @@ ALTER TABLE public.socios
   ADD CONSTRAINT percentual_societario_range
   CHECK (percentual_societario >= 0 AND percentual_societario <= 100);
 
--- 3. Padronizar observacao → observacoes (deprecar coluna singular onde duplicada)
--- contas_pagar: migrar observacao → observacoes se observacoes estiver vazio
-UPDATE public.contas_pagar
-  SET observacoes = COALESCE(observacoes, observacao)
-  WHERE observacao IS NOT NULL AND (observacoes IS NULL OR observacoes = '');
-
--- contas_receber: mesma migração
-UPDATE public.contas_receber
-  SET observacoes = COALESCE(observacoes, observacao)
-  WHERE observacao IS NOT NULL AND (observacoes IS NULL OR observacoes = '');
-
--- movimentacoes_societarias
-UPDATE public.movimentacoes_societarias
-  SET observacoes = COALESCE(observacoes, observacao)
-  WHERE observacao IS NOT NULL AND (observacoes IS NULL OR observacoes = '');
+-- 3. (removido) Migração observacao → observacoes descartada.
+-- O app usa observacao (singular) que já é o nome correto das colunas no banco.
 
 -- 4. Index em socios.user_id para lookups de vínculo
 CREATE INDEX IF NOT EXISTS idx_socios_user_id ON public.socios(user_id)
