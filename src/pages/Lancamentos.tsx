@@ -418,7 +418,9 @@ export default function Lancamentos() {
     if (dialogTipo === "aporte") { await handleSaveAporte(status); return; }
     if (dialogTipo === "distribuicao") { closeDialog(); return; } // distribuicao editing not supported inline
     if (!campo(form, "descricao") || !campo(form, "valor") || !campo(form, "vencimento")) return;
-    const record = buildRecord(status) as any;
+    // "reprovado" is not a valid status for contas_pagar or contas_receber enums — sanitize to "rascunho"
+    const safeStatus = status === "reprovado" ? "rascunho" : status;
+    const record = buildRecord(safeStatus) as any;
 
     // Block save if target competencia is in a closed month
     const comp = record.competencia || record.vencimento?.substring(0, 7) || "";
@@ -472,11 +474,15 @@ export default function Lancamentos() {
 
   const handleApprove = async (row: any) => {
     const upd = { status: "aprovado", aprovado_por: user?.id, aprovado_em: new Date().toISOString() } as any;
+    if (row._tipo === "aporte") { await updateAporte(row.id, upd); return; }
+    if (row._tipo === "distribuicao") return; // distribuicoes_lucro approval managed in Distribuição page
     if (row._tipo === "pagar") await updatePagar(row.id, upd);
     else await updateReceber(row.id, upd);
   };
 
   const handleReject = async (row: any) => {
+    if (row._tipo === "aporte") { await updateAporte(row.id, { status: "reprovado" } as any); return; }
+    if (row._tipo === "distribuicao") return; // distribuicoes_lucro rejection managed in Distribuição page
     if (row._tipo === "pagar") await updatePagar(row.id, { status: "rascunho" } as any);
     else await updateReceber(row.id, { status: "rascunho" } as any);
   };
