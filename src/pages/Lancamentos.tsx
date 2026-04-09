@@ -396,14 +396,17 @@ export default function Lancamentos() {
 
   const handleSaveAporte = async (status: string) => {
     if (!campo(form, "socio_id") || !campo(form, "tipo") || !campo(form, "valor")) return;
+    // Valid statuses for movimentacoes_societarias (status_aprovacao enum)
+    const validAporteStatuses = ["rascunho", "pendente", "aprovado", "reprovado"];
+    const safeStatus = validAporteStatuses.includes(status) ? status : "pendente";
     const record: any = {
       socio_id: campo(form, "socio_id"),
       tipo: campo(form, "tipo"),
       descricao: campo(form, "descricao") || null,
       valor: Number(campo(form, "valor")),
       data: campo(form, "vencimento") || new Date().toISOString().split("T")[0],
-      observacao: campo(form, "observacao") || null,
-      status,
+      observacoes: campo(form, "observacao") || null,
+      status: safeStatus,
       criado_por: user?.id,
     };
     if (editingRow) {
