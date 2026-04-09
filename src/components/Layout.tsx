@@ -4,7 +4,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, ChevronDown, LogOut } from "lucide-react";
 import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+
+const PAGE_NAMES: Record<string, string> = {
+  "/": "Dashboard",
+  "/lancamentos": "Lancamentos",
+  "/importacao": "Importar Planilha",
+  "/aportes": "Aportes e Movimentacoes",
+  "/distribuicao": "Distribuicao de Lucros",
+  "/dre": "DRE Gerencial",
+  "/fechamento": "Fechamento Mensal",
+  "/configuracoes": "Configuracoes",
+};
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,6 +25,11 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const { empresas, empresaAtual, setEmpresaAtual } = useEmpresa();
   const { signOut, user } = useAuth();
+  const location = useLocation();
+
+  const currentPageName = PAGE_NAMES[location.pathname] ||
+    Object.entries(PAGE_NAMES).find(([path]) => path !== "/" && location.pathname.startsWith(path))?.[1] ||
+    "";
 
   const displayEmpresas = empresas.length > 0 ? empresas : [
     { id: "mock-1", nome: "Empresa Alpha", razao_social: null, cnpj: null, ativa: true },
@@ -48,9 +65,9 @@ export function Layout({ children }: LayoutProps) {
             <div className="flex items-center gap-3">
               <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
 
-              {/* Chip da empresa — visível e com a cor da marca */}
+              {/* Chip da empresa — visivel em todos os tamanhos */}
               <div
-                className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-md border"
+                className="flex items-center gap-2 px-2.5 py-1 rounded-md border"
                 style={{
                   borderColor: `${corPrincipal}33`,
                   background: `${corPrincipal}0d`,
@@ -63,10 +80,20 @@ export function Layout({ children }: LayoutProps) {
                 {empresaAtual?.logo_url ? (
                   <img src={empresaAtual.logo_url} alt="" className="h-4 w-4 object-contain rounded shrink-0" />
                 ) : null}
-                <span className="text-xs font-semibold tracking-tight text-foreground/90 max-w-[180px] truncate">
-                  {empresaAtual?.nome || displayEmpresas[0]?.nome || "—"}
+                <span className="text-xs font-semibold tracking-tight text-foreground/90 max-w-[120px] sm:max-w-[180px] truncate">
+                  {empresaAtual?.nome || displayEmpresas[0]?.nome || "\u2014"}
                 </span>
               </div>
+
+              {/* Current page name / breadcrumb */}
+              {currentPageName && (
+                <>
+                  <span className="hidden sm:block text-muted-foreground/40 text-xs">/</span>
+                  <span className="hidden sm:block text-xs text-muted-foreground font-medium truncate max-w-[200px]">
+                    {currentPageName}
+                  </span>
+                </>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -110,7 +137,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
           </header>
 
-          <main className="flex-1 p-6 overflow-auto">
+          <main className="flex-1 p-3 sm:p-4 lg:p-6 overflow-auto">
             {children}
           </main>
         </div>

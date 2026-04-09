@@ -40,9 +40,58 @@ interface SystemUser {
 
 const EMPTY_FORM: FormState = { nome: "", cpf: "", email: "", percentual_societario: "" };
 
-function SocioForm({ form, onChange }: { form: FormState; onChange: (f: FormState) => void }) {
+function formatCpf(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function isValidCpfFormat(cpf: string): boolean {
+  if (!cpf) return true; // CPF is optional
+  return /^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(cpf);
+}
+
+function SocioForm({
+  form,
+  onChange,
+  alocado,
+  disponivel,
+}: {
+  form: FormState;
+  onChange: (f: FormState) => void;
+  alocado: number;
+  disponivel: number;
+}) {
+  const cpfInvalid = form.cpf.length > 0 && !isValidCpfFormat(form.cpf);
+  const newPercent = form.percentual_societario ? parseFloat(form.percentual_societario) : 0;
+  const totalAfter = alocado + newPercent;
+  const exceedsLimit = totalAfter > 100;
+
   return (
     <div className="space-y-4">
+      {/* Progress bar for percentage allocation */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{alocado.toFixed(2)}% alocado (outros sócios)</span>
+          <span>{disponivel.toFixed(2)}% disponível</span>
+        </div>
+        <div className="h-2 rounded-full bg-secondary overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${
+              exceedsLimit ? "bg-destructive" : totalAfter === 100 ? "bg-green-500" : "bg-primary"
+            }`}
+            style={{ width: `${Math.min(totalAfter, 100)}%` }}
+          />
+        </div>
+        {exceedsLimit && (
+          <p className="text-xs text-destructive font-medium">
+            Total seria {totalAfter.toFixed(2)}% — excede o limite de 100%
+          </p>
+        )}
+      </div>
+
       <div className="space-y-2">
         <Label>Nome *</Label>
         <Input
@@ -52,15 +101,19 @@ function SocioForm({ form, onChange }: { form: FormState; onChange: (f: FormStat
           placeholder="Nome completo do sócio"
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>CPF</Label>
           <Input
             value={form.cpf}
-            onChange={(e) => onChange({ ...form, cpf: e.target.value })}
+            onChange={(e) => onChange({ ...form, cpf: formatCpf(e.target.value) })}
             placeholder="000.000.000-00"
-            className="bg-secondary border-border"
+            className={`bg-secondary border-border ${cpfInvalid ? "border-destructive" : ""}`}
+            maxLength={14}
           />
+          {cpfInvalid && (
+            <p className="text-xs text-destructive">Formato inválido. Use XXX.XXX.XXX-XX</p>
+          )}
         </div>
         <div className="space-y-2">
           <Label>Participação (%)</Label>
@@ -71,7 +124,7 @@ function SocioForm({ form, onChange }: { form: FormState; onChange: (f: FormStat
             max="100"
             value={form.percentual_societario}
             onChange={(e) => onChange({ ...form, percentual_societario: e.target.value })}
-            className="bg-secondary border-border"
+            className={`bg-secondary border-border ${exceedsLimit ? "border-destructive" : ""}`}
           />
         </div>
       </div>
@@ -161,8 +214,35 @@ export default function CadastroSocios() {
     toast({ title: "Vínculo removido" });
   };
 
+  const getOtherSociosTotal = (excludeId?: string) => {
+    return socios
+      .filter((s) => s.ativo && s.percentual_societario != null && s.id !== excludeId)
+      .reduce((sum, s) => sum + (s.percentual_societario || 0), 0);
+  };
+
+  const validatePercentageAndCpf = (excludeId?: string): boolean => {
+    if (form.cpf && !isValidCpfFormat(form.cpf)) {
+      toast({ title: "CPF inválido", description: "Use o formato XXX.XXX.XXX-XX", variant: "destructive" });
+      return false;
+    }
+    if (form.percentual_societario) {
+      const newPercent = parseFloat(form.percentual_societario);
+      const othersTotal = getOtherSociosTotal(excludeId);
+      if (othersTotal + newPercent > 100) {
+        toast({
+          title: "Percentual excede 100%",
+          description: `Outros sócios somam ${othersTotal.toFixed(2)}%. O máximo permitido é ${(100 - othersTotal).toFixed(2)}%.`,
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleCreate = async () => {
     if (!form.nome) return;
+    if (!validatePercentageAndCpf()) return;
     const ok = await insert({
       nome: form.nome,
       cpf: form.cpf || null,
@@ -188,6 +268,7 @@ export default function CadastroSocios() {
 
   const handleEdit = async () => {
     if (!editTarget || !form.nome) return;
+    if (!validatePercentageAndCpf(editTarget.id)) return;
     const ok = await update(editTarget.id, {
       nome: form.nome,
       cpf: form.cpf || null,
@@ -242,6 +323,7 @@ export default function CadastroSocios() {
       )}
 
       <div className="stat-card p-0 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
@@ -329,6 +411,7 @@ export default function CadastroSocios() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Info box about the linking model */}
@@ -342,11 +425,11 @@ export default function CadastroSocios() {
 
       {/* Create Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Novo Sócio — {empresaAtual?.nome}</DialogTitle>
           </DialogHeader>
-          <SocioForm form={form} onChange={setForm} />
+          <SocioForm form={form} onChange={setForm} alocado={getOtherSociosTotal()} disponivel={Math.max(0, 100 - getOtherSociosTotal())} />
           <Button onClick={handleCreate} disabled={!form.nome} className="w-full mt-2">
             Criar Sócio
           </Button>
@@ -355,9 +438,9 @@ export default function CadastroSocios() {
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
           <DialogHeader><DialogTitle>Editar Sócio</DialogTitle></DialogHeader>
-          <SocioForm form={form} onChange={setForm} />
+          <SocioForm form={form} onChange={setForm} alocado={getOtherSociosTotal(editTarget?.id)} disponivel={Math.max(0, 100 - getOtherSociosTotal(editTarget?.id))} />
           <Button onClick={handleEdit} disabled={!form.nome} className="w-full mt-2">
             Salvar Alterações
           </Button>
@@ -366,7 +449,7 @@ export default function CadastroSocios() {
 
       {/* Vincular Usuário Dialog */}
       <Dialog open={vincularOpen} onOpenChange={setVincularOpen}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Vincular Usuário — {vincularTarget?.nome}</DialogTitle>
           </DialogHeader>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, PieChart, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -22,10 +22,19 @@ export default function Distribuicao() {
   const [socioValues, setSocioValues] = useState<Record<string, string>>({});
 
   const { data: distribuicoes, loading, refetch, update } = useEmpresaData<Record<string, unknown>>("distribuicoes_lucro");
-  const { data: distSocios } = useEmpresaData<Record<string, unknown>>("distribuicao_lucro_socios", {
-    select: "*, socios(nome)",
-  });
   const { data: socios } = useEmpresaData<Record<string, unknown>>("socios", { orderBy: "nome" });
+
+  // distribuicao_lucro_socios has no empresa_id column; RLS scopes via
+  // parent distribuicoes_lucro join, so we query it directly.
+  const [distSocios, setDistSocios] = useState<Record<string, unknown>[]>([]);
+  useEffect(() => {
+    if (distribuicoes.length === 0) { setDistSocios([]); return; }
+    const ids = distribuicoes.map((d) => d.id as string);
+    (supabase.from("distribuicao_lucro_socios") as any)
+      .select("*, socios(nome)")
+      .in("distribuicao_id", ids)
+      .then(({ data }: { data: any }) => setDistSocios(data || []));
+  }, [distribuicoes]);
 
   const totalDistribuido = distribuicoes
     .filter((d) => d.status === "aprovado")
@@ -92,10 +101,10 @@ export default function Distribuicao() {
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" />Nova Distribuição</Button>
           </DialogTrigger>
-          <DialogContent className="bg-card border-border max-w-lg">
+          <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
             <DialogHeader><DialogTitle>Nova Distribuição de Lucro</DialogTitle></DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Competência *</Label><Input type="month" value={form.competencia || ""} onChange={(e) => setForm({ ...form, competencia: e.target.value })} className="bg-secondary border-border" /></div>
                 <div className="space-y-2"><Label>Data Efetiva</Label><Input type="date" value={form.data_efetiva || ""} onChange={(e) => setForm({ ...form, data_efetiva: e.target.value })} className="bg-secondary border-border" /></div>
               </div>
@@ -107,7 +116,7 @@ export default function Distribuicao() {
                   <div className="space-y-2">
                     {socios.map((s) => (
                       <div key={s.id as string} className="flex items-center gap-3">
-                        <span className="text-sm w-40 truncate">{s.nome as string}</span>
+                        <span className="text-sm w-24 sm:w-40 truncate shrink-0">{s.nome as string}</span>
                         <Input
                           type="number"
                           step="0.01"
@@ -144,7 +153,7 @@ export default function Distribuicao() {
             const sociosDistribuicao = distSocios.filter((ds) => ds.distribuicao_id === d.id);
             return (
               <div key={d.id as string} className="stat-card">
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-warning/10"><PieChart className="h-4 w-4 text-warning" /></div>
                     <div>
@@ -172,7 +181,7 @@ export default function Distribuicao() {
                 </div>
                 {sociosDistribuicao.length > 0 && (
                   <div className="border-t border-border pt-3">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {sociosDistribuicao.map((s) => (
                         <div key={s.id as string} className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">{(s as any).socios?.nome || "—"}</span>

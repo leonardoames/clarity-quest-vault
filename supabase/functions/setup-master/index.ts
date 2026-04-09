@@ -11,12 +11,19 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const email = Deno.env.get("MASTER_EMAIL");
+    const password = Deno.env.get("MASTER_PASSWORD");
 
-    const email = "lucas@w3pagamentos.com.br";
-    const password = "123456";
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("Missing required env vars: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
+    }
+    if (!email || !password) {
+      throw new Error("Missing required env vars: MASTER_EMAIL and MASTER_PASSWORD");
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
     // Check if user already exists
     const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();

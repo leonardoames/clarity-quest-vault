@@ -167,7 +167,7 @@ export default function FluxoCaixa() {
           </Button>
         </div>
         <Select value={contaFiltro} onValueChange={setContaFiltro}>
-          <SelectTrigger className="w-[200px] bg-secondary border-border">
+          <SelectTrigger className="w-full sm:w-[200px] bg-secondary border-border">
             <SelectValue placeholder="Todas as contas" />
           </SelectTrigger>
           <SelectContent>
@@ -182,7 +182,7 @@ export default function FluxoCaixa() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="h-4 w-4 text-success" />

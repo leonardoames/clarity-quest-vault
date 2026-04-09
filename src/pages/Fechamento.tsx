@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Lock, Unlock, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Lock, Unlock, AlertTriangle, CheckCircle2, Clock, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,6 +10,23 @@ import { useEmpresa } from "@/contexts/EmpresaContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+
+/**
+ * Check if a given competencia (YYYY-MM) is closed.
+ * Import this function in other pages to verify if edits should be blocked.
+ *
+ * Usage:
+ *   import { isCompetenciaFechada } from "@/pages/Fechamento";
+ *   const fechado = isCompetenciaFechada(fechamentos, "2026-03");
+ */
+export function isCompetenciaFechada(
+  fechamentos: Record<string, unknown>[],
+  competencia: string
+): boolean {
+  return fechamentos.some(
+    (f) => f.competencia === competencia && f.status === "fechado"
+  );
+}
 
 const STATUS_CONFIG = {
   aberto: { label: "Aberto", icon: Clock, className: "text-warning" },
@@ -24,6 +41,11 @@ export default function Fechamento() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedComp, setSelectedComp] = useState<string | null>(null);
   const [observacao, setObservacao] = useState("");
+
+  // Reopen dialog state
+  const [reabrirDialogOpen, setReabrirDialogOpen] = useState(false);
+  const [reabrirTarget, setReabrirTarget] = useState<{ id: string; comp: string } | null>(null);
+  const [reabrirMotivo, setReabrirMotivo] = useState("");
 
   const { data: fechamentos, loading, refetch, update } = useEmpresaData<Record<string, unknown>>("fechamentos_mensais", {
     orderBy: "competencia",
@@ -80,12 +102,26 @@ export default function Fechamento() {
     setObservacao("");
   };
 
-  const handleReabrir = async (id: string) => {
-    await update(id, {
+  const openReabrir = (id: string, comp: string) => {
+    setReabrirTarget({ id, comp });
+    setReabrirMotivo("");
+    setReabrirDialogOpen(true);
+  };
+
+  const handleReabrir = async () => {
+    if (!reabrirTarget || !reabrirMotivo.trim()) {
+      toast({ title: "Motivo obrigatório", description: "Informe o motivo da reabertura.", variant: "destructive" });
+      return;
+    }
+    await update(reabrirTarget.id, {
       status: "aberto",
       reaberto_por: user?.id,
       reaberto_em: new Date().toISOString(),
+      observacao_reabertura: reabrirMotivo.trim(),
     } as any);
+    toast({ title: "Mês reaberto", description: `Competência ${reabrirTarget.comp} foi reaberta.` });
+    setReabrirDialogOpen(false);
+    setReabrirMotivo("");
   };
 
   return (
@@ -108,8 +144,8 @@ export default function Fechamento() {
             const Icon = config.icon;
 
             return (
-              <div key={comp} className="stat-card">
-                <div className="flex items-center justify-between">
+              <div key={comp} className={`stat-card ${status === "fechado" ? "opacity-60 border-success/30 bg-success/5" : ""}`}>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-4">
                     <div className={`p-2.5 rounded-lg bg-secondary ${config.className}`}>
                       <Icon className="h-5 w-5" />
@@ -137,7 +173,7 @@ export default function Fechamento() {
                       </Button>
                     )}
                     {status === "fechado" && (
-                      <Button variant="outline" size="sm" onClick={() => handleReabrir(fech!.id as string)}>
+                      <Button variant="outline" size="sm" onClick={() => openReabrir(fech!.id as string, comp)}>
                         <Unlock className="h-4 w-4 mr-2" />Reabrir
                       </Button>
                     )}
@@ -149,8 +185,17 @@ export default function Fechamento() {
         </div>
       )}
 
+      {/* Warning about closed months */}
+      <div className="rounded-lg border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
+        <Info className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+        <p>
+          <strong className="text-foreground">Meses fechados impedem a edição de lançamentos naquele período.</strong>{" "}
+          Para editar lançamentos de um mês fechado, é necessário reabri-lo informando o motivo da reabertura.
+        </p>
+      </div>
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
           <DialogHeader><DialogTitle>Fechamento — {selectedComp}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             {pendencias.length > 0 && selectedComp === months[0] && (
@@ -172,6 +217,43 @@ export default function Fechamento() {
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
               <Button onClick={() => selectedComp && handleFechar(selectedComp)}>
                 <Lock className="h-4 w-4 mr-2" />Fechar Mês
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reopen Confirmation Dialog */}
+      <Dialog open={reabrirDialogOpen} onOpenChange={setReabrirDialogOpen}>
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning" />
+              Reabrir Competência — {reabrirTarget?.comp}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              A reabertura de um mês fechado permitirá edições em todos os lançamentos daquele período.
+              Informe o motivo abaixo para prosseguir.
+            </p>
+            <div className="space-y-2">
+              <Label>Motivo da reabertura *</Label>
+              <Textarea
+                value={reabrirMotivo}
+                onChange={(e) => setReabrirMotivo(e.target.value)}
+                placeholder="Informe o motivo da reabertura (obrigatório)..."
+                className="bg-secondary border-border"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReabrirDialogOpen(false)}>Cancelar</Button>
+              <Button
+                variant="destructive"
+                onClick={handleReabrir}
+                disabled={!reabrirMotivo.trim()}
+              >
+                <Unlock className="h-4 w-4 mr-2" />Confirmar Reabertura
               </Button>
             </div>
           </div>

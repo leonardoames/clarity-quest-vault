@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
-  Plus, Search, Filter, Copy, CheckCircle, XCircle, ChevronDown, ChevronUp,
+  Plus, Search, Filter, Copy, CheckCircle, XCircle, ChevronDown, ChevronUp, Trash2, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCurrency } from "@/lib/mock-data";
-import { useEmpresaData } from "@/hooks/useEmpresaData";
+import { useEmpresaData, calcularValorFinal } from "@/hooks/useEmpresaData";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,7 +60,10 @@ export default function ContasPagar() {
   const sf = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const filters = filtroStatus !== "todos" ? { status: filtroStatus } : {};
-  const { data: contas, loading, insert, update } = useEmpresaData<any>("contas_pagar", {
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
+  const { data: contas, loading, insert, update, remove } = useEmpresaData<any>("contas_pagar", {
     select: "*, fornecedores(nome), categorias_financeiras(nome), centros_custo(nome), contas_caixa(nome, banco)",
     filters,
   });
@@ -77,6 +80,32 @@ export default function ContasPagar() {
   });
 
   const totalFiltrado = filtrados.reduce((s, c) => s + Number(c.valor || 0), 0);
+
+  const totalPages = Math.max(1, Math.ceil(filtrados.length / ITEMS_PER_PAGE));
+  const paginados = filtrados.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  // Auto-compute valor final in real-time
+  const valorFinal = useMemo(() => {
+    const valor = Number(campo(form, "valor")) || 0;
+    const juros = Number(campo(form, "juros")) || 0;
+    const multa = Number(campo(form, "multa")) || 0;
+    const desconto = Number(campo(form, "desconto")) || 0;
+    const taxas = Number(campo(form, "taxas")) || 0;
+    return calcularValorFinal({ valor_original: valor, juros, multa, desconto, taxas });
+  }, [form]);
+
+  // Reset page when filters change
+  const handleBuscaChange = (v: string) => { setBusca(v); setPage(1); };
+  const handleFiltroChange = (v: string) => { setFiltroStatus(v); setPage(1); };
+
+  const handleDelete = async (c: any) => {
+    const confirmed = window.confirm(`Tem certeza que deseja excluir "${c.descricao}"?`);
+    if (!confirmed) return;
+    await remove(c.id);
+  };
+
+  const isVencido = (c: any) =>
+    c.vencimento && new Date(c.vencimento) < new Date() && ['pendente', 'aprovado'].includes(c.status);
 
   const handleSeedCategorias = async () => {
     if (!empresaAtual?.id) return;
@@ -187,11 +216,11 @@ export default function ContasPagar() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por descrição, fornecedor ou NF..."
-            value={busca} onChange={(e) => setBusca(e.target.value)}
+            value={busca} onChange={(e) => handleBuscaChange(e.target.value)}
             className="pl-9 bg-secondary border-border"
           />
         </div>
-        <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+        <Select value={filtroStatus} onValueChange={handleFiltroChange}>
           <SelectTrigger className="w-[160px] bg-secondary border-border">
             <Filter className="h-3.5 w-3.5 mr-1.5" /><SelectValue />
           </SelectTrigger>
@@ -229,7 +258,7 @@ export default function ContasPagar() {
                 <tr><td colSpan={8} className="text-center text-muted-foreground py-8">Carregando...</td></tr>
               ) : filtrados.length === 0 ? (
                 <tr><td colSpan={8} className="text-center text-muted-foreground py-8">Nenhum lançamento</td></tr>
-              ) : filtrados.map((c) => (
+              ) : paginados.map((c) => (
                 <tr key={c.id}>
                   <td>
                     <div>
@@ -251,7 +280,15 @@ export default function ContasPagar() {
                   <td className="text-muted-foreground text-sm">
                     {c.vencimento ? new Date(c.vencimento + "T00:00:00").toLocaleDateString("pt-BR") : "—"}
                   </td>
-                  <td><StatusBadge status={c.status} /></td>
+                  <td>
+                    {isVencido(c) ? (
+                      <span className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-500 ring-1 ring-inset ring-red-500/20">
+                        Vencido
+                      </span>
+                    ) : (
+                      <StatusBadge status={c.status} />
+                    )}
+                  </td>
                   <td>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Duplicar" onClick={() => handleDuplicate(c)}>
@@ -272,6 +309,9 @@ export default function ContasPagar() {
                           Pagar
                         </Button>
                       )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir" onClick={() => handleDelete(c)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -279,32 +319,54 @@ export default function ContasPagar() {
             </tbody>
           </table>
         </div>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t border-border">
+            <p className="text-sm text-muted-foreground">
+              Mostrando {((page - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(page * ITEMS_PER_PAGE, filtrados.length)} de {filtrados.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground">Página {page} de {totalPages}</span>
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Form Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-card border-border max-w-2xl">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-xl lg:max-w-2xl">
           <DialogHeader><DialogTitle>Novo Lançamento — Contas a Pagar</DialogTitle></DialogHeader>
           <div className="space-y-5 max-h-[75vh] overflow-y-auto pr-2">
 
-            {/* Essencial */}
+            {/* Dados Principais */}
             <div className="space-y-3">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Dados Essenciais</p>
+              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Dados Principais</p>
               <div className="space-y-2">
-                <Label>Descrição *</Label>
-                <Input value={campo(form,"descricao")} onChange={(e) => sf("descricao", e.target.value)} className="bg-secondary border-border" placeholder="Ex: Aluguel escritório abril" />
+                <Label>Descrição <span className="text-red-500">*</span></Label>
+                <Input value={campo(form,"descricao")} onChange={(e) => sf("descricao", e.target.value)} className="bg-secondary border-border text-lg" placeholder="Ex: Aluguel escritório abril" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Valor (R$) *</Label>
-                  <Input type="number" step="0.01" min="0" value={campo(form,"valor")} onChange={(e) => sf("valor", e.target.value)} className="bg-secondary border-border" />
+                  <Label>Valor (R$) <span className="text-red-500">*</span></Label>
+                  <Input type="number" step="0.01" min="0" value={campo(form,"valor")} onChange={(e) => sf("valor", e.target.value)} className="bg-secondary border-border text-lg" />
+                  {(Number(campo(form, "juros")) || Number(campo(form, "multa")) || Number(campo(form, "desconto")) || Number(campo(form, "taxas"))) ? (
+                    <p className="text-sm font-medium text-primary">
+                      Valor Final: {formatCurrency(valorFinal)}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label>Vencimento *</Label>
+                  <Label>Vencimento <span className="text-red-500">*</span></Label>
                   <Input type="date" value={campo(form,"vencimento")} onChange={(e) => handleVencimentoChange(e.target.value)} className="bg-secondary border-border" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Competência</Label>
                   <Input type="month" value={campo(form,"competencia")} onChange={(e) => sf("competencia", e.target.value)} className="bg-secondary border-border" />
@@ -316,9 +378,9 @@ export default function ContasPagar() {
               </div>
             </div>
 
-            {/* Partes */}
-            <div className="space-y-3 border-t border-border pt-4">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Partes e Classificação</p>
+            {/* Classificação */}
+            <div className="space-y-3 border-t border-border pt-4 mt-4">
+              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Classificação</p>
               <div className="space-y-2">
                 <Label>Fornecedor</Label>
                 <div className="flex gap-2">
@@ -334,7 +396,7 @@ export default function ContasPagar() {
                   </Button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Categoria</Label>
                   <div className="flex gap-2">
@@ -368,7 +430,7 @@ export default function ContasPagar() {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Conta Bancária</Label>
                   <Select value={toSv(campo(form,"conta_caixa_id"))} onValueChange={(v) => fromSv(v, "conta_caixa_id", sf)}>
@@ -396,8 +458,11 @@ export default function ContasPagar() {
               </div>
             </div>
 
-            {/* Documento e Data */}
-            <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+            {/* Pagamento */}
+            <div className="border-t pt-4 mt-4">
+              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-3">Pagamento</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Nota Fiscal / Documento</Label>
                 <Input value={campo(form,"nota_fiscal")} onChange={(e) => sf("nota_fiscal", e.target.value)} placeholder="Número NF, boleto..." className="bg-secondary border-border" />
@@ -409,7 +474,7 @@ export default function ContasPagar() {
             </div>
 
             {/* Ajustes Financeiros (collapsible) */}
-            <div className="border-t border-border pt-4">
+            <div className="border-t pt-4 mt-4">
               <button
                 type="button"
                 className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
@@ -425,7 +490,7 @@ export default function ContasPagar() {
                     <Label>Valor Original (R$)</Label>
                     <Input type="number" step="0.01" min="0" value={campo(form,"valor_original")} onChange={(e) => sf("valor_original", e.target.value)} className="bg-secondary border-border" />
                   </div>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[["juros","Juros"],["multa","Multa"],["desconto","Desconto"],["taxas","Taxas"]].map(([k,l]) => (
                       <div key={k} className="space-y-2">
                         <Label>{l} (R$)</Label>
@@ -448,7 +513,7 @@ export default function ContasPagar() {
                 <span className="text-[10px] font-medium uppercase tracking-widest">Recorrência</span>
               </button>
               {showRecorrencia && (
-                <div className="mt-3 grid grid-cols-2 gap-4">
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Periodicidade</Label>
                     <Select value={campo(form,"recorrencia") || "nenhuma"} onValueChange={(v) => sf("recorrencia", v)}>
@@ -486,7 +551,7 @@ export default function ContasPagar() {
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+          <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" onClick={() => { setDialogOpen(false); setForm({}); }}>Cancelar</Button>
             <Button variant="secondary" onClick={() => handleSave("rascunho")}
               disabled={!campo(form,"descricao") || !campo(form,"valor") || !campo(form,"vencimento")}>
@@ -502,7 +567,7 @@ export default function ContasPagar() {
 
       {/* Quick Create Dialog */}
       <Dialog open={!!qc} onOpenChange={(o) => { if (!o) setQc(null); }}>
-        <DialogContent className="bg-card border-border max-w-sm">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>
               {qc?.type === "fornecedor" ? "Novo Fornecedor" : qc?.type === "categoria" ? "Nova Categoria" : "Novo Centro de Custo"}

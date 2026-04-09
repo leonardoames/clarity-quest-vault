@@ -93,7 +93,7 @@ export default function CadastroGenerico({ title, table, fields, activeField = "
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) closeDialog(); }}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingId ? "Editar registro" : "Novo registro"}</DialogTitle>
           </DialogHeader>

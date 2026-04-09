@@ -61,7 +61,7 @@ function ContaForm({ form, onChange }: { form: FormState; onChange: (f: FormStat
           placeholder="Ex: Conta Principal Bradesco"
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Tipo</Label>
           <Select value={form.tipo} onValueChange={(v) => onChange({ ...form, tipo: v })}>
@@ -84,7 +84,7 @@ function ContaForm({ form, onChange }: { form: FormState; onChange: (f: FormStat
           />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label>Agência</Label>
           <Input
@@ -217,6 +217,7 @@ export default function CadastroContasCaixa() {
       </div>
 
       <div className="stat-card p-0 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
@@ -279,11 +280,12 @@ export default function CadastroContasCaixa() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Create Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Nova Conta Bancária — {empresaAtual?.nome}</DialogTitle>
           </DialogHeader>
@@ -296,7 +298,7 @@ export default function CadastroContasCaixa() {
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
           <DialogHeader><DialogTitle>Editar Conta Bancária</DialogTitle></DialogHeader>
           <ContaForm form={form} onChange={setForm} />
           <Button onClick={handleEdit} disabled={!form.nome} className="w-full mt-2">

@@ -22,7 +22,7 @@ export function StatCard({ title, value, icon: Icon, trend, trendUp, variant = "
   const cfg = variantConfig[variant];
 
   return (
-    <div className={cn("stat-card animate-fade-up group", variant === "primary" && "border-primary/20")}>
+    <div className={cn("stat-card animate-fade-up group min-h-[110px] hover:shadow-lg hover:shadow-black/30 transition-shadow", variant === "primary" && "border-primary/20")}>
       {/* Accent bar top */}
       <div className={cn("absolute top-0 left-0 h-0.5 w-0 rounded-full transition-all duration-500 group-hover:w-full", cfg.bar)} />
 
@@ -40,7 +40,7 @@ export function StatCard({ title, value, icon: Icon, trend, trendUp, variant = "
           </p>
         </div>
         <div className={cn("p-2.5 rounded-lg shrink-0 transition-all duration-300", cfg.icon)}>
-          <Icon className="h-4 w-4" />
+          <Icon className="h-5 w-5" />
         </div>
       </div>
 

@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Plus, Search, Filter, Copy, CheckCircle, XCircle, ChevronDown, ChevronUp,
   ArrowDownCircle, ArrowUpCircle, ChevronLeft, ChevronRight, Wallet,
-  TrendingUp, TrendingDown, Pencil, Activity,
+  TrendingUp, TrendingDown, Pencil, Activity, Trash2, AlertTriangle, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCurrency } from "@/lib/mock-data";
 import { useEmpresaData } from "@/hooks/useEmpresaData";
@@ -18,6 +22,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmpresa } from "@/contexts/EmpresaContext";
+import { gerarLancamentosRecorrentes } from "@/lib/recurrence";
+import { isCompetenciaFechada } from "@/pages/Fechamento";
 
 const FORMA_PGTO = [
   { value: "pix", label: "PIX" },
@@ -85,6 +91,13 @@ export default function Lancamentos() {
   const [bulkContaId,     setBulkContaId]     = useState<BulkField>({ enabled: false, value: "" });
   const [bulkForma,       setBulkForma]       = useState<BulkField>({ enabled: false, value: "" });
 
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+
+  // Pagination
+  const PAGE_SIZE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+
   const rowKey = (row: any) => `${row._tipo}|${row.id}`;
   const isSelected = (row: any) => selectedIds.has(rowKey(row));
   const toggleSelect = (row: any) => setSelectedIds(prev => {
@@ -119,11 +132,11 @@ export default function Lancamentos() {
   };
 
   // Data
-  const { data: contasPagar, loading: lpagar, insert: insertPagar, update: updatePagar } =
+  const { data: contasPagar, loading: lpagar, insert: insertPagar, update: updatePagar, remove: removePagar } =
     useEmpresaData<any>("contas_pagar", {
       select: "*, fornecedores(nome), categorias_financeiras(nome), centros_custo(nome), contas_caixa(nome, banco)",
     });
-  const { data: contasReceber, loading: lreceber, insert: insertReceber, update: updateReceber } =
+  const { data: contasReceber, loading: lreceber, insert: insertReceber, update: updateReceber, remove: removeReceber } =
     useEmpresaData<any>("contas_receber", {
       select: "*, clientes(nome), categorias_financeiras(nome), contas_caixa(nome, banco)",
     });
@@ -132,6 +145,7 @@ export default function Lancamentos() {
   const { data: categorias, insert: insertCategoria } = useEmpresaData<any>("categorias_financeiras", { orderBy: "nome" });
   const { data: centrosCusto, insert: insertCentroCusto } = useEmpresaData<any>("centros_custo", { orderBy: "nome" });
   const { data: contasBancarias } = useEmpresaData<any>("contas_caixa", { orderBy: "nome" });
+  const { data: fechamentos } = useEmpresaData<Record<string, unknown>>("fechamentos_mensais", { orderBy: "competencia" });
 
   const loading = lpagar || lreceber;
 
@@ -181,6 +195,10 @@ export default function Lancamentos() {
         return da.localeCompare(db);
       });
   }, [contasPagar, contasReceber, periodoTipo, mes, filtroTipo, filtroStatus, filtroCategoria, filtroConta, busca, modoExtrato]);
+
+  // Reset page when filtered results change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setCurrentPage(1); }, [lancamentosComSaldo.length]);
 
   const totalSaidas = useMemo(
     () => lancamentos.filter((c) => c._tipo === "pagar").reduce((s: number, c: any) => s + Number(c.valor || 0), 0),
@@ -268,15 +286,48 @@ export default function Lancamentos() {
       : { ...base, cliente_id: campo(form, "cliente_id") || null };
   };
 
+  const getRecordCompetencia = (row: any): string => {
+    return row.competencia || (row.vencimento ? row.vencimento.substring(0, 7) : "");
+  };
+
   const handleSave = async (status: string) => {
     if (!campo(form, "descricao") || !campo(form, "valor") || !campo(form, "vencimento")) return;
     const record = buildRecord(status) as any;
+
+    // Block save if target competencia is in a closed month
+    const comp = record.competencia || record.vencimento?.substring(0, 7) || "";
+    if (comp && isCompetenciaFechada(fechamentos, comp)) {
+      toast({ title: "Não é possível editar lançamentos de um mês fechado", variant: "destructive" });
+      return;
+    }
+    // Also block if editing a record whose original competencia was closed
+    if (editingRow) {
+      const originalComp = getRecordCompetencia(editingRow);
+      if (originalComp && isCompetenciaFechada(fechamentos, originalComp)) {
+        toast({ title: "Não é possível editar lançamentos de um mês fechado", variant: "destructive" });
+        return;
+      }
+    }
+
     if (editingRow) {
       if (dialogTipo === "pagar") await updatePagar(editingRow.id, record);
       else await updateReceber(editingRow.id, record);
     } else {
       if (dialogTipo === "pagar") await insertPagar(record);
       else await insertReceber(record);
+
+      // Generate recurring entries if applicable
+      if (record.recorrencia && record.recorrencia !== 'nenhuma') {
+        const table = dialogTipo === "pagar" ? "contas_pagar" : "contas_receber";
+        const parcelas = gerarLancamentosRecorrentes(record, table);
+        for (const parcela of parcelas) {
+          if (dialogTipo === "pagar") await insertPagar(parcela as any);
+          else await insertReceber(parcela as any);
+        }
+        if (parcelas.length > 0) {
+          toast({ title: `${parcelas.length} parcelas recorrentes criadas` });
+        }
+      }
     }
     closeDialog();
   };
@@ -380,6 +431,39 @@ export default function Lancamentos() {
     toast({ title: "Categorias padrão criadas" });
   };
 
+  const handleDelete = async (row: any) => {
+    const comp = getRecordCompetencia(row);
+    if (comp && isCompetenciaFechada(fechamentos, comp)) {
+      toast({ title: "Não é possível editar lançamentos de um mês fechado", variant: "destructive" });
+      setDeleteTarget(null);
+      return;
+    }
+    if (row._tipo === "pagar") await removePagar(row.id);
+    else await removeReceber(row.id);
+    setDeleteTarget(null);
+  };
+
+  const handleBulkDelete = async () => {
+    await Promise.all(Array.from(selectedIds).map(key => {
+      const [tipo, id] = key.split("|");
+      if (tipo === "pagar") return removePagar(id);
+      return removeReceber(id);
+    }));
+    clearSelection();
+  };
+
+  // Pagination computed values
+  const totalPages = Math.max(1, Math.ceil(lancamentosComSaldo.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedRows = lancamentosComSaldo.slice((safeCurrentPage - 1) * PAGE_SIZE, safeCurrentPage * PAGE_SIZE);
+
+  // Helper: check if a record is overdue (vencido visual indicator)
+  const isOverdue = (row: any) => {
+    if (!row.vencimento) return false;
+    const today = new Date().toISOString().split("T")[0];
+    return row.vencimento < today && ["pendente", "aprovado"].includes(row.status);
+  };
+
   const isPagar = dialogTipo === "pagar";
   const formInvalid = !campo(form, "descricao") || !campo(form, "valor") || !campo(form, "vencimento");
   const colSpan = modoExtrato ? 13 : 12;
@@ -398,7 +482,7 @@ export default function Lancamentos() {
               : "todo o período"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             onClick={() => openNew("receber")}
@@ -522,9 +606,9 @@ export default function Lancamentos() {
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-lg px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-primary/10 border border-primary/20 rounded-lg px-4 py-2.5">
           <span className="text-sm font-medium">{selectedIds.size} selecionado(s)</span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="ghost" onClick={clearSelection} className="text-xs">
               Limpar seleção
             </Button>
@@ -534,12 +618,15 @@ export default function Lancamentos() {
             <Button size="sm" className="text-xs" onClick={() => setBulkDialogOpen(true)}>
               <Pencil className="h-3 w-3 mr-1.5" />Editar em lote
             </Button>
+            <Button size="sm" variant="outline" className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={handleBulkDelete}>
+              <Trash2 className="h-3 w-3 mr-1.5" />Excluir selecionados
+            </Button>
           </div>
         </div>
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="h-4 w-4 text-success" />
@@ -598,7 +685,7 @@ export default function Lancamentos() {
                 <tr><td colSpan={colSpan} className="text-center text-muted-foreground py-8">Carregando...</td></tr>
               ) : lancamentosComSaldo.length === 0 ? (
                 <tr><td colSpan={colSpan} className="text-center text-muted-foreground py-8">Nenhum lançamento encontrado</td></tr>
-              ) : lancamentosComSaldo.map((c: any) => (
+              ) : paginatedRows.map((c: any) => (
                 <tr key={`${c._tipo}-${c.id}`} className={isSelected(c) ? "bg-primary/5" : ""}>
                   <td>
                     <input
@@ -623,9 +710,14 @@ export default function Lancamentos() {
                     {c.vencimento ? new Date(c.vencimento + "T00:00:00").toLocaleDateString("pt-BR") : "—"}
                   </td>
                   <td>
-                    <div>
-                      <p className="font-medium">{c.descricao}</p>
-                      {c.nota_fiscal && <p className="text-xs text-muted-foreground">NF: {c.nota_fiscal}</p>}
+                    <div className="flex items-center gap-1.5">
+                      {isCompetenciaFechada(fechamentos, getRecordCompetencia(c)) && (
+                        <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" title="Mês fechado" />
+                      )}
+                      <div>
+                        <p className="font-medium">{c.descricao}</p>
+                        {c.nota_fiscal && <p className="text-xs text-muted-foreground">NF: {c.nota_fiscal}</p>}
+                      </div>
                     </div>
                   </td>
                   <td className="text-muted-foreground text-sm">
@@ -643,7 +735,16 @@ export default function Lancamentos() {
                   <td className={`text-right font-medium font-mono ${c._tipo === "pagar" ? "text-destructive" : "text-success"}`}>
                     {c._tipo === "pagar" ? "−" : "+"}{formatCurrency(Number(c.valor))}
                   </td>
-                  <td><StatusBadge status={c.status} /></td>
+                  <td>
+                    <div className="flex items-center gap-1.5">
+                      <StatusBadge status={c.status} />
+                      {isOverdue(c) && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-destructive/15 text-destructive border border-destructive/30">
+                          <AlertTriangle className="h-3 w-3" />VENCIDO
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   {modoExtrato && (
                     <td className="text-right font-mono text-sm font-medium">
                       <span className={(c.saldoAcumulado || 0) >= 0 ? "text-success" : "text-destructive"}>
@@ -658,6 +759,9 @@ export default function Lancamentos() {
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Duplicar" onClick={() => handleDuplicate(c)}>
                         <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir" onClick={() => setDeleteTarget(c)}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                       {c.status === "pendente" && (
                         <>
@@ -686,11 +790,40 @@ export default function Lancamentos() {
             </tbody>
           </table>
         </div>
+        {/* Pagination Controls */}
+        {lancamentosComSaldo.length > PAGE_SIZE && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">
+              Mostrando {(safeCurrentPage - 1) * PAGE_SIZE + 1}–{Math.min(safeCurrentPage * PAGE_SIZE, lancamentosComSaldo.length)} de {lancamentosComSaldo.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safeCurrentPage <= 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />Anterior
+              </Button>
+              <span className="text-sm font-medium">
+                {safeCurrentPage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safeCurrentPage >= totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              >
+                Próximo<ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Form Dialog */}
       <Dialog open={dialogTipo !== null} onOpenChange={(o) => { if (!o) closeDialog(); }}>
-        <DialogContent className="bg-card border-border max-w-2xl">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-xl lg:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {editingRow ? "Editar Lançamento" : isPagar ? "Nova Saída" : "Nova Entrada"}
@@ -702,32 +835,35 @@ export default function Lancamentos() {
           </DialogHeader>
           <div className="space-y-5 max-h-[75vh] overflow-y-auto pr-2">
 
-            {/* Essencial */}
+            {/* Informações Básicas */}
             <div className="space-y-3">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Dados Essenciais</p>
+              <div className="flex items-center gap-2">
+                <div className="h-1 w-1 rounded-full bg-primary" />
+                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Informações Básicas</p>
+              </div>
               <div className="space-y-2">
-                <Label>Descrição *</Label>
+                <Label className="flex items-center gap-1">Descrição <span className="text-destructive">*</span></Label>
                 <Input
                   value={campo(form, "descricao")}
                   onChange={(e) => sf("descricao", e.target.value)}
-                  className="bg-secondary border-border"
+                  className="bg-secondary border-primary/30 ring-primary/20 text-base"
                   placeholder={isPagar ? "Ex: Aluguel escritório" : "Ex: Venda de produto"}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Valor (R$) *</Label>
-                  <Input type="number" step="0.01" min="0" value={campo(form, "valor")} onChange={(e) => sf("valor", e.target.value)} className="bg-secondary border-border" />
+                  <Label className="flex items-center gap-1">Valor (R$) <span className="text-destructive">*</span></Label>
+                  <Input type="number" step="0.01" min="0" value={campo(form, "valor")} onChange={(e) => sf("valor", e.target.value)} className="bg-secondary border-primary/30 ring-primary/20 text-base font-mono" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Vencimento *</Label>
-                  <Input type="date" value={campo(form, "vencimento")} onChange={(e) => handleVencimentoChange(e.target.value)} className="bg-secondary border-border" />
+                  <Label className="flex items-center gap-1">Vencimento <span className="text-destructive">*</span></Label>
+                  <Input type="date" value={campo(form, "vencimento")} onChange={(e) => handleVencimentoChange(e.target.value)} className="bg-secondary border-primary/30 ring-primary/20 text-base" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Competência</Label>
-                  <Input type="month" value={campo(form, "competencia")} onChange={(e) => sf("competencia", e.target.value)} className="bg-secondary border-border" />
+                  <Input type="month" value={campo(form, "competencia")} onChange={(e) => sf("competencia", e.target.value)} className="bg-secondary border-border" placeholder="AAAA-MM" />
                 </div>
                 <div className="space-y-2">
                   <Label>{isPagar ? "Data Prevista de Pagamento" : "Data Prevista de Recebimento"}</Label>
@@ -736,9 +872,12 @@ export default function Lancamentos() {
               </div>
             </div>
 
-            {/* Partes e Classificação */}
+            {/* Classificação */}
             <div className="space-y-3 border-t border-border pt-4">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Partes e Classificação</p>
+              <div className="flex items-center gap-2">
+                <div className="h-1 w-1 rounded-full bg-primary" />
+                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Classificação</p>
+              </div>
               {isPagar ? (
                 <div className="space-y-2">
                   <Label>Fornecedor</Label>
@@ -772,7 +911,7 @@ export default function Lancamentos() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Categoria</Label>
                   <div className="flex gap-2">
@@ -806,7 +945,7 @@ export default function Lancamentos() {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Conta Bancária</Label>
                   <Select value={toSv(campo(form, "conta_caixa_id"))} onValueChange={(v) => fromSv(v, "conta_caixa_id", sf)}>
@@ -833,7 +972,7 @@ export default function Lancamentos() {
             </div>
 
             {/* Documento e Data */}
-            <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-border pt-4">
               <div className="space-y-2">
                 <Label>Nota Fiscal / Documento</Label>
                 <Input value={campo(form, "nota_fiscal")} onChange={(e) => sf("nota_fiscal", e.target.value)} placeholder="Número NF, boleto..." className="bg-secondary border-border" />
@@ -844,12 +983,15 @@ export default function Lancamentos() {
               </div>
             </div>
 
-            {/* Ajustes Financeiros */}
+            {/* Financeiro */}
             <div className="border-t border-border pt-4">
               <button type="button" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full" onClick={() => setShowAjustes(!showAjustes)}>
                 {showAjustes ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                <span className="text-[10px] font-medium uppercase tracking-widest">Ajustes Financeiros</span>
-                <span className="text-xs ml-auto">(juros, multa, desconto, taxas)</span>
+                <div className="flex items-center gap-2">
+                  <div className="h-1 w-1 rounded-full bg-muted-foreground" />
+                  <span className="text-xs font-semibold uppercase tracking-widest">Financeiro</span>
+                </div>
+                <span className="text-xs ml-auto text-muted-foreground">(juros, multa, desconto, taxas)</span>
               </button>
               {showAjustes && (
                 <div className="mt-3 space-y-3">
@@ -857,7 +999,7 @@ export default function Lancamentos() {
                     <Label>Valor Original (R$)</Label>
                     <Input type="number" step="0.01" min="0" value={campo(form, "valor_original")} onChange={(e) => sf("valor_original", e.target.value)} className="bg-secondary border-border" />
                   </div>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[["juros","Juros"],["multa","Multa"],["desconto","Desconto"],["taxas","Taxas"]].map(([k, l]) => (
                       <div key={k} className="space-y-2">
                         <Label>{l} (R$)</Label>
@@ -873,10 +1015,13 @@ export default function Lancamentos() {
             <div className="border-t border-border pt-4">
               <button type="button" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full" onClick={() => setShowRecorrencia(!showRecorrencia)}>
                 {showRecorrencia ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                <span className="text-[10px] font-medium uppercase tracking-widest">Recorrência</span>
+                <div className="flex items-center gap-2">
+                  <div className="h-1 w-1 rounded-full bg-muted-foreground" />
+                  <span className="text-xs font-semibold uppercase tracking-widest">Recorrência</span>
+                </div>
               </button>
               {showRecorrencia && (
-                <div className="mt-3 grid grid-cols-2 gap-4">
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Periodicidade</Label>
                     <Select value={campo(form, "recorrencia") || "nenhuma"} onValueChange={(v) => sf("recorrencia", v)}>
@@ -910,7 +1055,7 @@ export default function Lancamentos() {
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+          <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
             {!editingRow && (
               <Button variant="secondary" onClick={() => handleSave("rascunho")} disabled={formInvalid}>
@@ -926,7 +1071,7 @@ export default function Lancamentos() {
 
       {/* Bulk Edit Dialog */}
       <Dialog open={bulkDialogOpen} onOpenChange={(o) => { if (!o) setBulkDialogOpen(false); }}>
-        <DialogContent className="bg-card border-border max-w-md">
+        <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Editar em lote — {selectedIds.size} registro(s)</DialogTitle>
           </DialogHeader>
@@ -1002,6 +1147,33 @@ export default function Lancamentos() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza que deseja excluir este lançamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget && (
+                <>
+                  <strong>{deleteTarget.descricao}</strong> — {formatCurrency(Number(deleteTarget.valor || 0))}
+                  <br />
+                  Esta ação não pode ser desfeita.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && handleDelete(deleteTarget)}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Quick Create Dialog */}
       <Dialog open={!!qc} onOpenChange={(o) => { if (!o) setQc(null); }}>

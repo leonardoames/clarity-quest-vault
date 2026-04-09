@@ -1,7 +1,8 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   Wallet, ArrowDownCircle, ArrowUpCircle, TrendingUp,
-  AlertTriangle, Calendar, Users, Clock,
+  AlertTriangle, Calendar, Users, Clock, Bell, ArrowRight,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -65,6 +66,10 @@ export default function Dashboard() {
     const venc7d  = cpPendentes.filter((c: any) => c.vencimento <= in7) .reduce((s: number, c: any) => s + Number(c.valor || 0), 0);
     const venc30d = cpPendentes.filter((c: any) => c.vencimento <= in30).reduce((s: number, c: any) => s + Number(c.valor || 0), 0);
     const vencidos = cpPendentes.filter((c: any) => c.vencimento < hoje);
+    const vencimentosHoje = [
+      ...cpPendentes.filter((c: any) => c.vencimento === hoje).map((c: any) => ({ ...c, _tipo: "pagar" as const })),
+      ...crPendentes.filter((c: any) => c.vencimento === hoje).map((c: any) => ({ ...c, _tipo: "receber" as const })),
+    ];
 
     const receitaComp = contasReceber
       .filter((c: any) => c.competencia === mesAtual && !["cancelado","perdido"].includes(c.status))
@@ -118,7 +123,7 @@ export default function Dashboard() {
     const totalAportes = aportesPorSocio.reduce((s, a) => s + a.valor, 0);
 
     return {
-      totalPagar, totalReceber, venc7d, venc30d, vencidos,
+      totalPagar, totalReceber, venc7d, venc30d, vencidos, vencimentosHoje,
       resultadoCompetencia: receitaComp - despesaComp,
       resultadoCaixa: receitaCaixa - despesaCaixa,
       saldoProjetado: totalReceber - totalPagar,
@@ -143,14 +148,40 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Vencimentos Hoje */}
+      {stats.vencimentosHoje.length > 0 && (
+        <div className="stat-card border-warning/30">
+          <div className="flex items-center gap-2 mb-3">
+            <Bell className="h-4 w-4 text-warning" />
+            <h3 className="font-medium text-warning text-sm">{stats.vencimentosHoje.length} vencimento(s) hoje</h3>
+          </div>
+          <div className="space-y-1">
+            {stats.vencimentosHoje.map((item: any) => (
+              <div key={`hoje-${item._tipo}-${item.id}`} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40 last:border-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <StatusBadge status={item.status} />
+                  <span className="truncate">{item.descricao}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
+                    {item._tipo === "pagar" ? "a pagar" : "a receber"}
+                  </span>
+                </div>
+                <span className={`font-medium ml-4 shrink-0 ${item._tipo === "pagar" ? "text-destructive" : "text-success"}`}>
+                  {formatCurrency(Number(item.valor))}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Saldo Projetado"         value={formatCurrency(stats.saldoProjetado)}       icon={Wallet}          variant={stats.saldoProjetado >= 0 ? "success" : "danger"} />
         <StatCard title="Total a Pagar"            value={formatCurrency(stats.totalPagar)}           icon={ArrowDownCircle} variant="danger" />
         <StatCard title="Total a Receber"          value={formatCurrency(stats.totalReceber)}         icon={ArrowUpCircle}   variant="success" />
         <StatCard title="Resultado Competência"    value={formatCurrency(stats.resultadoCompetencia)} icon={TrendingUp}      variant={stats.resultadoCompetencia >= 0 ? "success" : "danger"} />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Resultado Caixa"          value={formatCurrency(stats.resultadoCaixa)}  icon={Wallet}    variant={stats.resultadoCaixa >= 0 ? "success" : "warning"} />
         <StatCard title="Total Aportes"            value={formatCurrency(stats.totalAportes)}    icon={Users}     variant="primary" />
         <StatCard title="Vence em 7 dias"          value={formatCurrency(stats.venc7d)}          icon={Clock}     variant={stats.venc7d > 0 ? "warning" : undefined} />
@@ -191,7 +222,7 @@ export default function Dashboard() {
           {/* Receitas vs Despesas — 6 meses */}
           <div className="stat-card space-y-3">
             <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Receitas vs Despesas — últimos 6 meses</h3>
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height="100%" minHeight={220} className="min-h-[220px] lg:min-h-[300px]">
               <BarChart data={stats.trend} barCategoryGap="30%">
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
@@ -210,7 +241,7 @@ export default function Dashboard() {
             {stats.despesasPorCategoria.length === 0 ? (
               <p className="text-muted-foreground text-sm py-8 text-center">Nenhuma despesa lançada no mês</p>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={220} className="min-h-[220px] lg:min-h-[300px]">
                 <PieChart>
                   <Pie data={stats.despesasPorCategoria} dataKey="valor" nameKey="categoria" cx="50%" cy="50%" outerRadius={80} label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false}>
                     {stats.despesasPorCategoria.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -250,16 +281,16 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Últimos lançamentos */}
+          {/* Ultimos lancamentos */}
           <div className="stat-card space-y-3">
-            <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Últimos Lançamentos</h3>
+            <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Ultimos Lancamentos</h3>
             <div className="space-y-0">
               {[
                 ...contasPagar.slice(0, 6).map((c: any) => ({ ...c, _tipo: "pagar" })),
                 ...contasReceber.slice(0, 6).map((c: any) => ({ ...c, _tipo: "receber" })),
               ]
                 .sort((a, b) => ((b.created_at || "") > (a.created_at || "") ? 1 : -1))
-                .slice(0, 8)
+                .slice(0, 5)
                 .map((item) => (
                   <div key={`${item._tipo}-${item.id}`} className="flex items-center justify-between text-sm py-2 border-b border-border/40 last:border-0">
                     <div className="flex items-center gap-2 min-w-0">
@@ -267,11 +298,18 @@ export default function Dashboard() {
                       <span className="truncate text-sm">{item.descricao}</span>
                     </div>
                     <span className={`font-medium font-mono ml-4 shrink-0 text-sm ${item._tipo === "pagar" ? "text-destructive" : "text-success"}`}>
-                      {item._tipo === "pagar" ? "−" : "+"}{formatCurrency(Number(item.valor))}
+                      {item._tipo === "pagar" ? "\u2212" : "+"}{formatCurrency(Number(item.valor))}
                     </span>
                   </div>
                 ))}
             </div>
+            <Link
+              to="/lancamentos"
+              className="flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium pt-2 border-t border-border/40 transition-colors"
+            >
+              Ver todos os lancamentos
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
 
         </div>

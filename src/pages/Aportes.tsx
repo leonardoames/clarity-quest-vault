@@ -88,7 +88,7 @@ export default function Aportes() {
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" />Nova Movimentação</Button>
           </DialogTrigger>
-          <DialogContent className="bg-card border-border">
+          <DialogContent className="bg-card border-border max-w-[95vw] sm:max-w-lg">
             <DialogHeader><DialogTitle>Nova Movimentação Societária</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
@@ -109,7 +109,7 @@ export default function Aportes() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Valor (R$) *</Label><Input type="number" step="0.01" value={form.valor || ""} onChange={(e) => setForm({ ...form, valor: e.target.value })} className="bg-secondary border-border" /></div>
                 <div className="space-y-2"><Label>Data</Label><Input type="date" value={form.data || ""} onChange={(e) => setForm({ ...form, data: e.target.value })} className="bg-secondary border-border" /></div>
               </div>
@@ -131,7 +131,7 @@ export default function Aportes() {
                 <div className="p-2 rounded-lg bg-primary/10"><UsersIcon className="h-4 w-4 text-primary" /></div>
                 <span className="font-medium">{s.nome}</span>
               </div>
-              <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                 <div><span className="text-muted-foreground block">Aportado</span><span className="font-medium text-success">{formatCurrency(s.totalAportado)}</span></div>
                 <div><span className="text-muted-foreground block">Retirado</span><span className="font-medium text-destructive">{formatCurrency(s.totalRetirado)}</span></div>
                 <div><span className="text-muted-foreground block">Saldo Líquido</span><span className="font-medium text-primary">{formatCurrency(s.saldoLiquido)}</span></div>
@@ -147,7 +147,7 @@ export default function Aportes() {
           <Input placeholder="Buscar por sócio ou descrição..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 bg-secondary border-border" />
         </div>
         <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-          <SelectTrigger className="w-[200px] bg-secondary border-border"><Filter className="h-3.5 w-3.5 mr-1.5" /><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[200px] bg-secondary border-border"><Filter className="h-3.5 w-3.5 mr-1.5" /><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos os tipos</SelectItem>
             {Object.entries(TIPO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
