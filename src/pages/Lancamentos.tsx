@@ -107,13 +107,7 @@ export default function Lancamentos() {
     if (next.has(rowKey(row))) next.delete(rowKey(row)); else next.add(rowKey(row));
     return next;
   });
-  const toggleSelectAll = () => {
-    if (selectedIds.size === lancamentosComSaldo.length && lancamentosComSaldo.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(lancamentosComSaldo.map((c: any) => rowKey(c))));
-    }
-  };
+  // toggleSelectAll is defined after lancamentosComSaldo below
   const clearSelection = () => setSelectedIds(new Set());
 
   const sf = (k: string, v: string) => {
@@ -198,9 +192,7 @@ export default function Lancamentos() {
       });
   }, [contasPagar, contasReceber, periodoTipo, mes, filtroTipo, filtroStatus, filtroCategoria, filtroConta, busca, modoExtrato]);
 
-  // Reset page when filtered results change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setCurrentPage(1); }, [lancamentosComSaldo.length]);
+  // (useEffect for page reset is defined after lancamentosComSaldo below)
 
   const totalSaidas = useMemo(
     () => lancamentos.filter((c) => c._tipo === "pagar").reduce((s: number, c: any) => s + Number(c.valor || 0), 0),
@@ -221,6 +213,19 @@ export default function Lancamentos() {
       return { ...c, saldoAcumulado: bal };
     });
   }, [lancamentos, modoExtrato]);
+
+  // Defined here (after lancamentosComSaldo) to avoid TDZ error
+  const toggleSelectAll = () => {
+    if (selectedIds.size === lancamentosComSaldo.length && lancamentosComSaldo.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(lancamentosComSaldo.map((c: any) => rowKey(c))));
+    }
+  };
+
+  // Reset page when filtered results change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setCurrentPage(1); }, [lancamentosComSaldo.length]);
 
   // Handlers
   const openNew = (tipo: "pagar" | "receber") => {
