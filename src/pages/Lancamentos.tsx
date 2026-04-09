@@ -216,16 +216,16 @@ export default function Lancamentos() {
 
   // Defined here (after lancamentosComSaldo) to avoid TDZ error
   const toggleSelectAll = () => {
-    if (selectedIds.size === lancamentosComSaldo.length && lancamentosComSaldo.length > 0) {
+    if (selectedIds.size === lancamentos.length && lancamentos.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(lancamentosComSaldo.map((c: any) => rowKey(c))));
+      setSelectedIds(new Set(lancamentos.map((c: any) => rowKey(c))));
     }
   };
 
-  // Reset page when filtered results change
+  // Reset page when filtered results change (lancamentos.length == lancamentosComSaldo.length always)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setCurrentPage(1); }, [lancamentosComSaldo.length]);
+  useEffect(() => { setCurrentPage(1); }, [lancamentos.length]);
 
   // Handlers
   const openNew = (tipo: "pagar" | "receber") => {
@@ -679,8 +679,8 @@ export default function Lancamentos() {
                   <input
                     type="checkbox"
                     className="accent-primary"
-                    checked={lancamentosComSaldo.length > 0 && selectedIds.size === lancamentosComSaldo.length}
-                    ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < lancamentosComSaldo.length; }}
+                    checked={lancamentos.length > 0 && selectedIds.size === lancamentos.length}
+                    ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < lancamentos.length; }}
                     onChange={toggleSelectAll}
                   />
                 </th>
