@@ -167,8 +167,8 @@ export default function Lancamentos() {
 
   const sf = (k: string, v: string) => {
     setForm((p) => ({ ...p, [k]: v }));
-    // Auto-detecta tipo pelo sinal do valor
-    if (k === "valor" && v !== "") {
+    // Auto-detecta tipo pelo sinal do valor (apenas para pagar/receber, nunca para aporte/distribuicao)
+    if (k === "valor" && v !== "" && (dialogTipo === "pagar" || dialogTipo === "receber")) {
       const num = parseFloat(v);
       if (!isNaN(num)) {
         if (num < 0) setDialogTipo("pagar");
