@@ -922,7 +922,7 @@ export default function Lancamentos() {
                   <td>
                     <div className="flex items-center gap-1.5">
                       {(c._tipo === "pagar" || c._tipo === "receber") && isCompetenciaFechada(fechamentos, getRecordCompetencia(c)) && (
-                        <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" title="Mês fechado" />
+                        <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-label="Mês fechado" />
                       )}
                       <div>
                         <p className="font-medium">{c.descricao}</p>

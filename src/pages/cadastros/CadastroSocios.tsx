@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEmpresaData } from "@/hooks/useEmpresaData";
 
 interface Socio {
+  [key: string]: unknown;
   id: string;
   nome: string;
   cpf: string | null;

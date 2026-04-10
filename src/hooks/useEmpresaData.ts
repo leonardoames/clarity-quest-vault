@@ -223,9 +223,9 @@ export function useEmpresaData<T extends Record<string, unknown>>(
   const softDelete = async (id: string) => {
     // Tables that use status='cancelado' for soft delete vs ativo=false
     if (TABLES_WITH_STATUS_CANCELADO.includes(table)) {
-      return update(id, { status: "cancelado" } as Partial<T>);
+      return update(id, { status: "cancelado" } as unknown as Partial<T>);
     }
-    return update(id, { ativo: false } as Partial<T>);
+    return update(id, { ativo: false } as unknown as Partial<T>);
   };
 
   return {
