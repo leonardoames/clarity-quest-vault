@@ -130,31 +130,46 @@ export type Database = {
       }
       contas_caixa: {
         Row: {
+          agencia: string | null
           ativa: boolean
+          banco: string | null
           created_at: string
+          descricao: string | null
+          digito: string | null
           empresa_id: string
           id: string
           nome: string
+          numero_conta: string | null
           saldo_inicial: number
           tipo: string
           updated_at: string
         }
         Insert: {
+          agencia?: string | null
           ativa?: boolean
+          banco?: string | null
           created_at?: string
+          descricao?: string | null
+          digito?: string | null
           empresa_id: string
           id?: string
           nome: string
+          numero_conta?: string | null
           saldo_inicial?: number
           tipo?: string
           updated_at?: string
         }
         Update: {
+          agencia?: string | null
           ativa?: boolean
+          banco?: string | null
           created_at?: string
+          descricao?: string | null
+          digito?: string | null
           empresa_id?: string
           id?: string
           nome?: string
+          numero_conta?: string | null
           saldo_inicial?: number
           tipo?: string
           updated_at?: string
@@ -171,6 +186,7 @@ export type Database = {
       }
       contas_pagar: {
         Row: {
+          agendado: boolean | null
           aprovado_em: string | null
           aprovado_por: string | null
           categoria_id: string | null
@@ -179,22 +195,35 @@ export type Database = {
           conta_caixa_id: string | null
           created_at: string
           criado_por: string | null
+          data_movimento: string | null
           data_pagamento: string | null
+          data_prevista: string | null
+          desconto: number | null
           descricao: string
           empresa_id: string
+          forma_pagamento: Database["public"]["Enums"]["forma_pagamento"] | null
           fornecedor_id: string | null
           id: string
+          importacao_id: string | null
+          juros: number | null
+          multa: number | null
+          nota_fiscal: string | null
           observacao: string | null
           observacao_aprovacao: string | null
+          origem_lancamento: string | null
           parcela_atual: number | null
+          qtd_recorrencia: number | null
           recorrencia: Database["public"]["Enums"]["tipo_recorrencia"]
           status: Database["public"]["Enums"]["status_pagar"]
+          taxas: number | null
           total_parcelas: number | null
           updated_at: string
           valor: number
+          valor_original: number | null
           vencimento: string
         }
         Insert: {
+          agendado?: boolean | null
           aprovado_em?: string | null
           aprovado_por?: string | null
           categoria_id?: string | null
@@ -203,22 +232,37 @@ export type Database = {
           conta_caixa_id?: string | null
           created_at?: string
           criado_por?: string | null
+          data_movimento?: string | null
           data_pagamento?: string | null
+          data_prevista?: string | null
+          desconto?: number | null
           descricao: string
           empresa_id: string
+          forma_pagamento?:
+            | Database["public"]["Enums"]["forma_pagamento"]
+            | null
           fornecedor_id?: string | null
           id?: string
+          importacao_id?: string | null
+          juros?: number | null
+          multa?: number | null
+          nota_fiscal?: string | null
           observacao?: string | null
           observacao_aprovacao?: string | null
+          origem_lancamento?: string | null
           parcela_atual?: number | null
+          qtd_recorrencia?: number | null
           recorrencia?: Database["public"]["Enums"]["tipo_recorrencia"]
           status?: Database["public"]["Enums"]["status_pagar"]
+          taxas?: number | null
           total_parcelas?: number | null
           updated_at?: string
           valor: number
+          valor_original?: number | null
           vencimento: string
         }
         Update: {
+          agendado?: boolean | null
           aprovado_em?: string | null
           aprovado_por?: string | null
           categoria_id?: string | null
@@ -227,19 +271,33 @@ export type Database = {
           conta_caixa_id?: string | null
           created_at?: string
           criado_por?: string | null
+          data_movimento?: string | null
           data_pagamento?: string | null
+          data_prevista?: string | null
+          desconto?: number | null
           descricao?: string
           empresa_id?: string
+          forma_pagamento?:
+            | Database["public"]["Enums"]["forma_pagamento"]
+            | null
           fornecedor_id?: string | null
           id?: string
+          importacao_id?: string | null
+          juros?: number | null
+          multa?: number | null
+          nota_fiscal?: string | null
           observacao?: string | null
           observacao_aprovacao?: string | null
+          origem_lancamento?: string | null
           parcela_atual?: number | null
+          qtd_recorrencia?: number | null
           recorrencia?: Database["public"]["Enums"]["tipo_recorrencia"]
           status?: Database["public"]["Enums"]["status_pagar"]
+          taxas?: number | null
           total_parcelas?: number | null
           updated_at?: string
           valor?: number
+          valor_original?: number | null
           vencimento?: string
         }
         Relationships: [
@@ -278,76 +336,132 @@ export type Database = {
             referencedRelation: "fornecedores"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "contas_pagar_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "importacoes_planilhas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       contas_receber: {
         Row: {
+          agendado: boolean | null
           aprovado_em: string | null
           aprovado_por: string | null
           categoria_id: string | null
+          centro_custo_id: string | null
           cliente_id: string | null
           competencia: string
           conta_caixa_id: string | null
           created_at: string
           criado_por: string | null
+          data_movimento: string | null
+          data_prevista: string | null
           data_recebimento: string | null
+          desconto: number | null
           descricao: string
           empresa_id: string
+          forma_pagamento: Database["public"]["Enums"]["forma_pagamento"] | null
           id: string
+          importacao_id: string | null
+          juros: number | null
+          multa: number | null
+          nota_fiscal: string | null
           observacao: string | null
           observacao_aprovacao: string | null
+          observacoes: string | null
+          origem_lancamento: string | null
           parcela_atual: number | null
+          qtd_recorrencia: number | null
           recorrencia: Database["public"]["Enums"]["tipo_recorrencia"]
           status: Database["public"]["Enums"]["status_receber"]
+          taxas: number | null
           total_parcelas: number | null
           updated_at: string
           valor: number
+          valor_original: number | null
           vencimento: string
         }
         Insert: {
+          agendado?: boolean | null
           aprovado_em?: string | null
           aprovado_por?: string | null
           categoria_id?: string | null
+          centro_custo_id?: string | null
           cliente_id?: string | null
           competencia: string
           conta_caixa_id?: string | null
           created_at?: string
           criado_por?: string | null
+          data_movimento?: string | null
+          data_prevista?: string | null
           data_recebimento?: string | null
+          desconto?: number | null
           descricao: string
           empresa_id: string
+          forma_pagamento?:
+            | Database["public"]["Enums"]["forma_pagamento"]
+            | null
           id?: string
+          importacao_id?: string | null
+          juros?: number | null
+          multa?: number | null
+          nota_fiscal?: string | null
           observacao?: string | null
           observacao_aprovacao?: string | null
+          observacoes?: string | null
+          origem_lancamento?: string | null
           parcela_atual?: number | null
+          qtd_recorrencia?: number | null
           recorrencia?: Database["public"]["Enums"]["tipo_recorrencia"]
           status?: Database["public"]["Enums"]["status_receber"]
+          taxas?: number | null
           total_parcelas?: number | null
           updated_at?: string
           valor: number
+          valor_original?: number | null
           vencimento: string
         }
         Update: {
+          agendado?: boolean | null
           aprovado_em?: string | null
           aprovado_por?: string | null
           categoria_id?: string | null
+          centro_custo_id?: string | null
           cliente_id?: string | null
           competencia?: string
           conta_caixa_id?: string | null
           created_at?: string
           criado_por?: string | null
+          data_movimento?: string | null
+          data_prevista?: string | null
           data_recebimento?: string | null
+          desconto?: number | null
           descricao?: string
           empresa_id?: string
+          forma_pagamento?:
+            | Database["public"]["Enums"]["forma_pagamento"]
+            | null
           id?: string
+          importacao_id?: string | null
+          juros?: number | null
+          multa?: number | null
+          nota_fiscal?: string | null
           observacao?: string | null
           observacao_aprovacao?: string | null
+          observacoes?: string | null
+          origem_lancamento?: string | null
           parcela_atual?: number | null
+          qtd_recorrencia?: number | null
           recorrencia?: Database["public"]["Enums"]["tipo_recorrencia"]
           status?: Database["public"]["Enums"]["status_receber"]
+          taxas?: number | null
           total_parcelas?: number | null
           updated_at?: string
           valor?: number
+          valor_original?: number | null
           vencimento?: string
         }
         Relationships: [
@@ -356,6 +470,13 @@ export type Database = {
             columns: ["categoria_id"]
             isOneToOne: false
             referencedRelation: "categorias_financeiras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contas_receber_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
             referencedColumns: ["id"]
           },
           {
@@ -377,6 +498,13 @@ export type Database = {
             columns: ["empresa_id"]
             isOneToOne: false
             referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contas_receber_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "importacoes_planilhas"
             referencedColumns: ["id"]
           },
         ]
@@ -509,28 +637,46 @@ export type Database = {
         Row: {
           ativa: boolean
           cnpj: string | null
+          cor_principal: string | null
           created_at: string
+          data_inicio_operacional: string | null
           id: string
+          logo_url: string | null
+          moeda_padrao: string | null
           nome: string
+          observacoes_internas: string | null
           razao_social: string | null
+          segmento: string | null
           updated_at: string
         }
         Insert: {
           ativa?: boolean
           cnpj?: string | null
+          cor_principal?: string | null
           created_at?: string
+          data_inicio_operacional?: string | null
           id?: string
+          logo_url?: string | null
+          moeda_padrao?: string | null
           nome: string
+          observacoes_internas?: string | null
           razao_social?: string | null
+          segmento?: string | null
           updated_at?: string
         }
         Update: {
           ativa?: boolean
           cnpj?: string | null
+          cor_principal?: string | null
           created_at?: string
+          data_inicio_operacional?: string | null
           id?: string
+          logo_url?: string | null
+          moeda_padrao?: string | null
           nome?: string
+          observacoes_internas?: string | null
           razao_social?: string | null
+          segmento?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -670,6 +816,62 @@ export type Database = {
           },
         ]
       }
+      importacoes_planilhas: {
+        Row: {
+          criado_em: string | null
+          criado_por: string | null
+          empresa_id: string
+          id: string
+          linhas_com_erro: number | null
+          linhas_validas: number | null
+          nome_arquivo: string | null
+          observacoes: string | null
+          revertido_em: string | null
+          revertido_por: string | null
+          status: string | null
+          tipo: string
+          total_linhas: number | null
+        }
+        Insert: {
+          criado_em?: string | null
+          criado_por?: string | null
+          empresa_id: string
+          id?: string
+          linhas_com_erro?: number | null
+          linhas_validas?: number | null
+          nome_arquivo?: string | null
+          observacoes?: string | null
+          revertido_em?: string | null
+          revertido_por?: string | null
+          status?: string | null
+          tipo: string
+          total_linhas?: number | null
+        }
+        Update: {
+          criado_em?: string | null
+          criado_por?: string | null
+          empresa_id?: string
+          id?: string
+          linhas_com_erro?: number | null
+          linhas_validas?: number | null
+          nome_arquivo?: string | null
+          observacoes?: string | null
+          revertido_em?: string | null
+          revertido_por?: string | null
+          status?: string | null
+          tipo?: string
+          total_linhas?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "importacoes_planilhas_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       movimentacoes_societarias: {
         Row: {
           aprovado_em: string | null
@@ -680,6 +882,7 @@ export type Database = {
           descricao: string | null
           empresa_id: string
           id: string
+          importacao_id: string | null
           observacao_aprovacao: string | null
           socio_id: string
           status: Database["public"]["Enums"]["status_aprovacao"]
@@ -696,6 +899,7 @@ export type Database = {
           descricao?: string | null
           empresa_id: string
           id?: string
+          importacao_id?: string | null
           observacao_aprovacao?: string | null
           socio_id: string
           status?: Database["public"]["Enums"]["status_aprovacao"]
@@ -712,6 +916,7 @@ export type Database = {
           descricao?: string | null
           empresa_id?: string
           id?: string
+          importacao_id?: string | null
           observacao_aprovacao?: string | null
           socio_id?: string
           status?: Database["public"]["Enums"]["status_aprovacao"]
@@ -725,6 +930,13 @@ export type Database = {
             columns: ["empresa_id"]
             isOneToOne: false
             referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimentacoes_societarias_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "importacoes_planilhas"
             referencedColumns: ["id"]
           },
           {
@@ -747,6 +959,7 @@ export type Database = {
           nome: string
           percentual_societario: number | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           ativo?: boolean
@@ -758,6 +971,7 @@ export type Database = {
           nome: string
           percentual_societario?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           ativo?: boolean
@@ -769,6 +983,7 @@ export type Database = {
           nome?: string
           percentual_societario?: number | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -806,6 +1021,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      criar_categorias_ecommerce: {
+        Args: { p_empresa_id: string }
+        Returns: undefined
+      }
+      criar_categorias_padrao: {
+        Args: { p_empresa_id: string }
+        Returns: undefined
+      }
+      criar_centros_custo_padrao: {
+        Args: { p_empresa_id: string }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -826,6 +1053,15 @@ export type Database = {
         | "financeiro_aprovador"
         | "financeiro_operador"
         | "visualizador"
+      forma_pagamento:
+        | "pix"
+        | "boleto"
+        | "transferencia"
+        | "cartao_credito"
+        | "cartao_debito"
+        | "dinheiro"
+        | "cheque"
+        | "outro"
       status_aprovacao: "rascunho" | "pendente" | "aprovado" | "reprovado"
       status_fechamento: "aberto" | "em_fechamento" | "fechado"
       status_pagar:
@@ -835,6 +1071,7 @@ export type Database = {
         | "pago"
         | "vencido"
         | "cancelado"
+        | "reprovado"
       status_receber:
         | "rascunho"
         | "pendente"
@@ -843,6 +1080,7 @@ export type Database = {
         | "vencido"
         | "cancelado"
         | "perdido"
+        | "reprovado"
       tipo_categoria: "receita" | "despesa" | "ambos"
       tipo_movimentacao:
         | "aporte_capital"
@@ -990,6 +1228,16 @@ export const Constants = {
         "financeiro_operador",
         "visualizador",
       ],
+      forma_pagamento: [
+        "pix",
+        "boleto",
+        "transferencia",
+        "cartao_credito",
+        "cartao_debito",
+        "dinheiro",
+        "cheque",
+        "outro",
+      ],
       status_aprovacao: ["rascunho", "pendente", "aprovado", "reprovado"],
       status_fechamento: ["aberto", "em_fechamento", "fechado"],
       status_pagar: [
@@ -999,6 +1247,7 @@ export const Constants = {
         "pago",
         "vencido",
         "cancelado",
+        "reprovado",
       ],
       status_receber: [
         "rascunho",
@@ -1008,6 +1257,7 @@ export const Constants = {
         "vencido",
         "cancelado",
         "perdido",
+        "reprovado",
       ],
       tipo_categoria: ["receita", "despesa", "ambos"],
       tipo_movimentacao: [

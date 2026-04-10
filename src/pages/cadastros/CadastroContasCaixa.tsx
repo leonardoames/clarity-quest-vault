@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
 interface ContaCaixa {
+  [key: string]: unknown;
   id: string;
   nome: string;
   tipo: string | null;
