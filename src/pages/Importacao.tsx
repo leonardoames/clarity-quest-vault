@@ -193,7 +193,7 @@ async function insertWithRetry(
 ): Promise<{ count: number; error?: string }> {
   let recs = records.map((r) => ({ ...r }));
   for (let attempt = 0; attempt < 8; attempt++) {
-    const { error } = await (supabase.from(table) as any).insert(recs);
+    const { error } = await (supabase.from(table as any) as any).insert(recs);
     if (!error) return { count: recs.length };
     // Detecta "Could not find the 'coluna' column ... in the schema cache"
     const colMatch = error.message.match(/find the '(\w+)' column/);
@@ -527,7 +527,7 @@ export default function Importacao() {
     };
     const table = tableMap[imp.tipo];
 
-    await (supabase.from(table) as any)
+    await (supabase.from(table as any) as any)
       .update({ status: "cancelado" })
       .eq("importacao_id", imp.id)
       .in("status", ["rascunho", "pendente"]);
